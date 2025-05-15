@@ -1,0 +1,19 @@
+{
+  "name": "scra-proxy-server",
+  "version": "1.0.0",
+  "description": "Proxy server for SCRA single record requests via Salesforce integration.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "pdf-parse": "^1.1.1",
+    "playwright": "^1.43.1",
+    "axios": "^1.6.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}

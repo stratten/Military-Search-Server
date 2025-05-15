@@ -1,0 +1,648 @@
+.required::before {
+	content: "*";
+	padding-left: 1%;
+	color: red;
+}
+
+.text-required {
+	color: red;
+}
+
+.fileDownloadPopover {
+	padding: 25px;
+}
+
+.pdfIcon {
+	background-image: url(../img/pdf.png);
+	background-repeat: no-repeat;
+	padding-left: 16px;
+}
+
+/* -----------------------------------*/
+/* ------>>>     HEADER      <<<------*/
+/* -----------------------------------*/
+#banner {
+  text-align: center;
+  background: #213650;
+  background-repeat: repeat-y;
+  color: #ffffff;
+  margin: 0 0 0 0;
+  padding: 0;
+  font-size: 0.8461538461538463em;
+}
+
+#bannerLine {
+  height: 24px;
+}
+
+#banner #section {
+  float: left;
+  position: absolute;
+  top: 0px;
+  left: 16px;
+  color: #c1c3c4;
+}
+
+#banner #free {
+	float: left; 
+	position: absolute; 
+	top: 0px; 
+	left: 332px; 
+	color: #c1c3c4;
+}
+.headerLink {
+  margin: 0 10px;
+}
+.headerLink a {
+  color: #fff;
+}
+#header-img {
+  background-image: url(../img/bg_header.jpg);
+  height: 169px;
+  width: 985px;
+  background-repeat: no-repeat;
+  background-color: #0b131d;
+  display: inline-block;
+}
+
+#header-img-container {
+height: 169px;
+}
+
+#sub-img {
+  background-color: #0b131d;
+}
+
+/* -----------------------------------*/
+/* ------>>> PAGE STRUCTURE  <<<------*/
+/* -----------------------------------*/
+#container {
+  width: 985px;
+  text-align: left;
+  margin: 0 auto 0 auto;
+  padding: 0;
+  position: relative;
+}
+
+#main{
+    padding: 0;
+    background-color: #F2F2F2;
+    background-position: 738px top;
+    clear: both;
+}
+
+#columnOne {
+  background-color: #FFFFFF;
+  width: 738px;
+  float: left;
+  border-right: 1px solid #d1d1d1;
+}
+
+.rowOne {
+  height: 237px;
+}
+
+
+#columnOne #news {
+    background-color: #ededed;
+    padding: 24px 34px 0 34px;
+    overflow: auto;
+}
+
+#columnOne .content {
+	margin-bottom: 10px;
+}
+
+#columnOne .content .text-right {
+	text-align: right;
+}
+
+#columnTwo {
+  background-color: #F2F2F2;
+  width: 246px;
+  float: right;
+  margin: 0 1px 0 -12px;
+}
+
+#columnTwo .content {
+  padding: 12px 12px 6px 12px;
+  border-bottom: 1px solid #d1d1d1;
+}
+
+.content {
+	padding: 24px 34px 24px 34px;
+}
+
+
+/* -----------------------------------*/
+/* ------>>>    NAVIGATION   <<<------*/
+/* -----------------------------------*/
+.navbar {
+  margin: 0px;
+  padding: 0;
+  border:0px;
+  height: 37px;
+  min-height: 37px;
+  background-repeat: repeat-x;
+  background-position: right;
+  color: #FFF;
+  clear: both;
+  background-color: #366;
+  z-index: 1;
+}
+.navbar ul {
+  margin: 0;
+  padding: 0;
+  font-size: 1.076923076923077em;
+  list-style: none;
+  overflow: hidden;
+  background-color: #7b0212;
+}
+.navbar ul li:first-child a {
+  padding: 0 24px;
+  /* adjust padding of the first item to fill any remaining space in the tab bar */
+
+}
+.navbar ul li {
+  float: left;
+  margin: 0;
+  padding: 0;
+  position: relative;
+  z-index: 9999;
+}
+.navbar ul li a {
+  background-color: #7b0212;
+  background-image: url(../img/bg_navbar_sprite.gif);
+  background-repeat: repeat-x;
+  border-left: 1px solid #b03f4e;
+  border-right: 1px solid #5d000c;
+  color: #ffffff;
+  font-weight: normal;
+  height: 37px;
+  line-height: 36px;
+  float: left;
+  padding: 0 25px;
+  
+  /* adjust padding to control the tab's width + text */
+
+}
+.navbar ul li a:hover {
+  background-color: #2465a8;
+  background-position: 0 -37px;
+}
+.navbar ul li a.active {
+  background-position: 0 -74px;
+  border-left: 1px solid #3e75aa;
+  border-right: 1px solid #163974;
+  line-height: 36px;
+  height: 37px;
+}
+.sidebar ul.nav {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.sidebar ul.nav li {
+  margin: 0;
+  padding: 0 !important;
+}
+
+/* -----------------------------------*/
+/* ------>>>     FOOTER       <<<-----*/
+/* -----------------------------------*/
+#footer {
+  clear: both;
+  line-height: 3em;
+  color: #ffffff;
+  font-weight: normal;
+  margin: 0 0 0 0;
+  padding: 0 20px 0 20px;
+  background-color: #213650;
+  text-align: left;
+}
+#footer a {
+  margin: 0;
+  padding: 0 0 0 0;
+  color: #ffffff;
+  font-weight: normal;
+}
+#footer a:link {
+  color: #ffffff;
+}
+#footer a:visited {
+  color: #ffffff;
+}
+#footer a:hover {
+  color: #ffffff;
+  text-decoration: underline;
+}
+#footer a:active {
+  color: #ffffff;
+}
+
+#footer div {
+	display:inline; 
+	padding:0em 1em 0em 0em;
+}
+
+.clear {
+	clear: both;
+}
+
+/* ---------------------------------------------*/
+/* ------>>> Table for account creation<<<------*/
+/* --------------------------------------------*/
+
+table.dataGrid {
+  margin-top: 0px;
+  margin-bottom: 16px;
+}
+table.dataGrid th {
+  padding: 5px;
+  font-weight: bold;
+  text-align: left;
+  vertical-align: middle;
+  background-color: #ccdae5;
+  border: 1px solid #999;
+}
+table.dataGrid td {
+  padding: 5px;
+  vertical-align: middle;
+  background-color: #fff;
+  border: 1px solid #999;
+}
+table.dataGrid td.footer {
+  background-color: #ccdae5;
+  text-align: right;
+  border: 1px solid #999;
+  vertical-align: middle;
+}
+table.shaded {
+  border: 1px solid #999;
+  margin-top: 0px;
+  margin-bottom: 16px;
+}
+table.shaded th, table.shaded td {
+  padding: 5px;
+  vertical-align: middle;
+  background-color: #ccdae5;
+  border-bottom: 1px solid #999;
+}
+table.steps {
+  margin-top: 16px;
+  margin-bottom: 16px;
+}
+table.steps td {
+  width: 75px;
+  height: 60px;
+  text-align: center;
+  font-weight: bold;
+  vertical-align: middle;
+  padding: 5px;
+  border: 2px solid #004d99;
+}
+table.steps td.trails {
+  padding: 0px;
+  border-top: none;
+  border-bottom: none;
+}
+table.steps td.selected {
+  background-color: #e6edf4;
+}
+table.form {
+  width: 100%;
+  margin: 0 0 8px 0;
+}
+table.form td {
+  margin: 0;
+  vertical-align: baseline;
+}
+table.form input[type="text"], table.form input[type="password"] {
+  height: 1.6923076923076925em;
+  line-height: 1.6923076923076925em;
+  padding: 0;
+}
+table.form .sampleInput {
+  display: block;
+  font-size: 0.8461538461538463em;
+  font-style: italic;
+  font-weight: bold;
+}
+table.form .note {
+  display: block;
+  text-align: right;
+}
+
+/* -----------------------------------*/
+/* ------>>> Table for account creation steps  END<<<------*/
+/* -----------------------------------*/
+
+/* -----------------------------------*/
+/* ------>>>     OUTLINE     <<<------*/
+/* -----------------------------------*/
+/*
+	* 	   RESET (Eric Meyer's)
+    *      Global Styles ??? (body, paragraphs, lists, etc)
+    *      Header
+    *      Page Structure (containers, skeleton)
+    *      Headings
+    *      Text Styles
+    *      Tables
+    *      Navigation (tabs, menus, etc)
+    *      Forms
+    *      Footer
+    *      Extras
+    
+    
+*/
+/* -----------------------------------*/
+/* ------>>>      RESET      <<<------*/
+/* -----------------------------------*/
+/* http://meyerweb.com/eric/tools/css/reset/ 
+   v2.0 | 20110126
+   License: none (public domain)
+*/
+html,
+body,
+div,
+span,
+applet,
+object,
+iframe,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p,
+blockquote,
+pre,
+a,
+abbr,
+acronym,
+address,
+big,
+cite,
+code,
+del,
+dfn,
+em,
+img,
+ins,
+kbd,
+q,
+s,
+samp,
+small,
+strike,
+strong,
+sub,
+sup,
+tt,
+var,
+b,
+u,
+i,
+center,
+dl,
+dt,
+dd,
+ol,
+ul,
+li,
+fieldset,
+form,
+label,
+legend,
+table,
+caption,
+tbody,
+tfoot,
+thead,
+tr,
+th,
+td,
+article,
+aside,
+canvas,
+details,
+embed,
+figure,
+figcaption,
+footer,
+header,
+hgroup,
+menu,
+nav,
+output,
+ruby,
+section,
+summary,
+time,
+mark,
+audio,
+video {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font-size: 100%;
+  font: inherit;
+  vertical-align: baseline;
+}
+/* HTML5 display-role reset for older browsers */
+article,
+aside,
+details,
+figcaption,
+figure,
+header,
+hgroup,
+menu,
+nav,
+section {
+  display: block;
+}
+body {
+  line-height: 1;
+}
+ol, ul {
+  list-style: none;
+}
+blockquote, q {
+  quotes: none;
+}
+blockquote:before,
+blockquote:after,
+q:before,
+q:after {
+  content: '';
+  content: none;
+}
+table {
+  border-collapse: collapse;
+  border-spacing: 0;
+}
+/* -----------------------------------*/
+/* ------>>>  GLOBAL STYLES  <<<------*/
+/* -----------------------------------*/
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-size: 100%;
+}
+body {
+  background-color: #5e8cbb;
+  font-family: Arial, Helvetica, sans-serif;
+  line-height: 1.3846153846153846em;
+  font-size: 0.8125em;
+}
+h1 {
+  padding: 0;
+  margin: 0 0 16px 0;
+  font-size: 2em;
+  font-weight: normal;
+}
+h2 {
+  padding: 0;
+  margin: 6px 0 13px 0;
+  font-size: 1.3846153846153846em;
+  font-weight: normal;
+  color: #820011;
+}
+h2.center, button.center {
+  text-align: center;
+}
+h3 {
+  padding: 0;
+  font-size: 1.3846153846153846em;
+  margin: 6px 0 13px 0;
+  font-weight: normal;
+}
+h4, h5, h6 {
+  padding: 0;
+  font-size: 1.2307692307692308em;
+  margin: 6px 0 13px 0;
+}
+h5 {
+  color: #666;
+}
+h6 {
+  font-size: 1em;
+  color: #666;
+}
+table {
+  border-collapse: collapse;
+}
+td, th {
+  padding: 3px;
+  margin: 0;
+}
+p {
+  padding: 0;
+  margin: 10px 0 18px 0;
+}
+img, a img {
+  border: none;
+}
+hr {
+  width: 100%;
+  border-color: #d1d1d1;
+  border-style: solid;
+  border-width: 1px 0 0;
+  display: block;
+  height: 0px;
+  margin: 2px 0 16px 0;
+  clear: both;
+}
+strong {
+  font-weight: bold;
+}
+em {
+  font-weight: bold;
+}
+/* Default Link Styles */
+a {
+  color: #004d99;
+  text-decoration: underline;
+  font-size: 12px;
+}
+ul {
+  list-style: disc;
+  margin: 5px 0 5px 25px;
+  padding: 0;
+}
+ol {
+  margin: 0;
+  padding: 0 0 0 22px;
+  list-style: decimal;
+}
+li {
+  margin: 0;
+  padding: 0;
+}
+ol li {
+  margin: 0;
+  padding: 0 0 0 0px;
+}
+
+.navbar ul a {
+  font-size: 12px;
+}
+
+a {
+  font-size: inherit;
+}
+
+.mt2 { margin-top: 20px; }
+
+a.disabled {
+  color: #666;
+  cursor: default;
+}
+
+img.loading {
+  max-width: 16px;
+  vertical-align: middle;
+}
+
+.progress {
+  box-shadow: none;
+}
+
+#columnOne #news {
+  margin-top: -24px;
+  margin-left: -34px;
+  margin-right: -34px;
+  padding-bottom: 14px;
+}
+
+[hidden].form-control {
+  display:none;
+}
+
+.space {
+  margin:0;
+  padding:0;
+  height:60px;
+}
+
+#footer{
+  display: flex;
+  justify-content: space-between;
+}
+
+.footerLeft {
+  width: 40%;
+}
+
+.footerCenter{
+  width: 35%;
+  text-align: center
+}
+
+.footerRight{
+  width: 25%;
+  text-align: right
+}
