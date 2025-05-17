@@ -28,7 +28,19 @@ async function runScraAutomation({
   const SCRA_URL = 'https://scra.dmdc.osd.mil/scra/#/single-record';
   let browser;
   try {
-    browser = await firefox.launch({ headless: true });
+    browser = await firefox.launch({ 
+      headless: true,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--no-first-run',
+        '--no-zygote',
+        '--single-process',
+        '--disable-gpu'
+      ]
+    });
     const context = await browser.newContext({ viewport: { width: 1200, height: 1600 } });
     const page = await context.newPage();
     await page.goto(SCRA_URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
