@@ -14,8 +14,18 @@ app.post('/scra-request', async (req, res) => {
     firstName,
     scraUsername,
     scraPassword,
-    matterId
+    matterId,
+    callbackUrl // Adding callback URL from Salesforce
   } = req.body;
+
+  console.log('Received request with data:', {
+    ssn: '***-**-' + (ssn ? ssn.slice(-4) : 'NONE'),
+    dob: dob || 'NONE',
+    lastName,
+    firstName,
+    matterId,
+    callbackUrl
+  });
 
   // Call the automation function and wait for it to complete
   await runScraAutomation({
@@ -25,7 +35,8 @@ app.post('/scra-request', async (req, res) => {
     firstName,
     scraUsername,
     scraPassword,
-    matterId
+    matterId,
+    endpointUrl: callbackUrl // Pass callback URL as endpointUrl
   });
 
   // Respond with a simple acknowledgment
