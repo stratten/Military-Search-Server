@@ -6,5 +6,5 @@ module.exports = {
   ssn: '157920228', // Digits only, no dashes
   dob: undefined, // Not provided for this test
   matterId: 'TEST_MATTER_001', // Example Matter ID for testing
-  endpointUrl: 'https://scra-dmdc-test.free.beeceptor.com'
+  endpointUrl: 'https://military-search-server-production.up.railway.app/scra-request'
 }; 
