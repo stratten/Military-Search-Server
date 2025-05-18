@@ -120,24 +120,6 @@ function setupNetworkLogging(page, runFolder) {
     }
   });
   
-  page.on('framenavigated', async (frame) => {
-    if (frame === page.mainFrame()) {
-      const url = frame.url();
-      console.log(`Main frame navigated to: ${url}`);
-      try {
-        // Ensure the page is somewhat settled before taking a screenshot
-        await page.waitForTimeout(500); // Small delay
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const screenshotPath = path.join(runFolder, `nav_screenshot_${timestamp}_${url.replace(/[^a-zA-Z0-9]/g, '_')}.png`);
-        await page.screenshot({ path: screenshotPath, fullPage: true });
-        console.log(`Screenshot taken on navigation: ${screenshotPath}`);
-        logNetworkEvent('navigation_screenshot', { url, screenshotPath });
-      } catch (e) {
-        console.error(`Failed to take screenshot on navigation to ${url}:`, e.message);
-      }
-    }
-  });
-  
   return {
     getNetworkEvents: () => networkEvents,
     logNetworkSummary: () => {
@@ -266,47 +248,12 @@ async function runScraAutomation({
       console.error('Page creation failed:', e);
       throw e;
     });
-    console.log('page object created, proceeding to network logger setup.');
-    
-    // Set up network logger
-    // networkLogger = setupNetworkLogging(page, runFolder); // Temporarily disable for testing newPage hang
-    
-    console.log('Page created successfully. (Network logger setup skipped for this test)');
-
-    // TEST: Try to navigate to Google and take a screenshot immediately
-    try {
-      console.log('Attempting simple navigation to Google (diagnostics for newPage hang)...');
-      await page.goto('https://www.google.com', { timeout: 30000, waitUntil: 'domcontentloaded' });
-      console.log('Successfully navigated to Google (diagnostics).');
-      await page.screenshot({ path: path.join(runFolder, 'screenshot_diagnostic_google.png') });
-      console.log('Diagnostic screenshot of Google saved.');
-      
-      // Intentionally stop here for this diagnostic test
-      console.log('Diagnostic test complete. Intentionally stopping.');
-      if (browser) await browser.close();
-      clearTimeout(safetyTimeout);
-      return; // Exit early
-
-    } catch (e) {
-      console.error('Error during diagnostic Google navigation:', e.message);
-      await page.screenshot({ path: path.join(runFolder, 'screenshot_diagnostic_google_error.png') });
-      if (browser) await browser.close();
-      clearTimeout(safetyTimeout);
-      throw e; // Re-throw
-    }
-    // --- END OF DIAGNOSTIC BLOCK ---
-/*
-    // Original code resumes here, temporarily commented out
     
     // Set up network logger
     networkLogger = setupNetworkLogging(page, runFolder);
     
     console.log('Page created successfully.');
     
-    // Use retry logic for navigating to the page with increased timeout and better error handling
-    // ... (rest of the original code commented out for this test)
-*/
-
     // Use retry logic for navigating to the page with increased timeout and better error handling
     await retry(
       async () => {
@@ -386,109 +333,35 @@ async function runScraAutomation({
     if (privacyAcceptBtn) {
       console.log('Privacy confirmation modal detected. Clicking Accept...');
       await privacyAcceptBtn.click();
-      // Wait for navigation or a known element on the next page if the click triggers a page load
-      // For now, a slightly longer timeout to allow the page to settle after modal interaction.
-      console.log('Waiting for page to settle after privacy modal...');
-      await page.waitForTimeout(3000); 
+      // Optionally wait for modal to disappear
+      await page.waitForTimeout(500); // Small delay to allow modal to close
     } else {
       console.log('No privacy confirmation modal detected.');
     }
 
-    // Check for login form with retries and more specific selectors
-    let loggedIn = false;
-    for (let i = 0; i < 3; i++) { // Retry up to 3 times
+    // Check for login form
+    if (await page.$('input#username')) {
+      console.log('Login form detected, logging in...');
       try {
-        if (await page.$('input#username')) { // Type 1 login form
-          console.log(`Attempt ${i+1}: Login form detected (type 1), logging in...`);
-          await page.fill('input#username', scraUsername);
-          await page.fill('input#password', scraPassword);
-          console.log('Submitting login credentials (type 1)...');
-          await Promise.all([
-            page.click("button[type='submit']"),
-            page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 45000 })
-          ]);
-          console.log('Logged in successfully (type 1)');
-          loggedIn = true;
-          break;
-        } else if (await page.$('input[name="Username"]') || await page.$('input[name="Password"]')) { // Type 2 (based on screenshot)
-          console.log(`Attempt ${i+1}: Login form detected (type 2), logging in...`);
-          await page.screenshot({ path: path.join(runFolder, `screenshot_before_login_attempt_${i+1}.png`) });
-
-          const usernameSelectors = ['input[name="Username"]', '#Username', 'input[name="username"]']; // Note: case sensitivity
-          const passwordSelectors = ['input[name="Password"]', '#Password', 'input[type="password"]'];
-          
-          let usernameFieldFilled = false;
-          for (const selector of usernameSelectors) {
-            if (await page.$(selector)) {
-              console.log(`Found username field with selector: ${selector}`);
-              await page.fill(selector, scraUsername);
-              usernameFieldFilled = true;
-              break;
-            }
-          }
-          if (!usernameFieldFilled) throw new Error('Username field not found in type 2 form');
-
-          let passwordFieldFilled = false;
-          for (const selector of passwordSelectors) {
-            if (await page.$(selector)) {
-              console.log(`Found password field with selector: ${selector}`);
-              await page.fill(selector, scraPassword);
-              passwordFieldFilled = true;
-              break;
-            }
-          }
-          if (!passwordFieldFilled) throw new Error('Password field not found in type 2 form');
-
-          const loginButtonSelectors = [
-            'input[type="submit"][value="Login"]', 
-            'button:has-text("Login")', 
-            '.login-button', // Added a more generic class often used
-            'button[name="login"]' // Another common name attribute
-          ];
-          let loginButtonClicked = false;
-          for (const selector of loginButtonSelectors) {
-            const button = await page.$(selector);
-            if (button && await button.isVisible()) {
-              console.log(`Found login button with selector: ${selector}`);
-              await Promise.all([
-                button.click(),
-                page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 45000 })
-              ]);
-              loginButtonClicked = true;
-              break;
-            }
-          }
-          if (!loginButtonClicked) throw new Error('Login button not found or not clickable in type 2 form');
-          
-          console.log('Logged in successfully (type 2)');
-          loggedIn = true;
-          break;
-        }
+        await page.fill('input#username', scraUsername);
+        await page.fill('input#password', scraPassword);
+        
+        console.log('Submitting login credentials...');
+        await Promise.all([
+          page.click("button[type='submit']"),
+          page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 45000 })
+        ]);
+        console.log('Logged in successfully');
       } catch (loginError) {
-        console.error(`Login attempt ${i+1} failed:`, loginError.message);
-        await page.screenshot({ path: path.join(runFolder, `screenshot_login_error_attempt_${i+1}.png`) });
-        if (i < 2) {
-          console.log('Waiting before retry...');
-          await page.waitForTimeout(2000);
-        } else {
-          throw new Error(`All login attempts failed: ${loginError.message}`);
-        }
+        console.error('Error during login:', loginError.message);
+        await page.screenshot({ path: path.join(runFolder, 'screenshot_login_error.png') });
+        throw new Error(`Login failed: ${loginError.message}`);
       }
-      if (loggedIn) break;
-      if (i < 2) {
-         console.log(`Login form not detected on attempt ${i+1}, waiting and retrying...`);
-         await page.waitForTimeout(2000);
-      }
+    } else {
+      console.log('No login form detected, continuing...');
     }
 
-    if (!loggedIn) {
-      console.log('No login form detected after retries, or login failed. Continuing without login...');
-      // Potentially throw an error here if login is strictly required
-      // throw new Error('Failed to log in after multiple attempts.');
-    }
-
-    // Give the page a moment to stabilize after login attempt or if no login was needed
-    console.log('Waiting for page to stabilize after login sequence...');
+    // Give the page a moment to stabilize after login
     await page.waitForTimeout(2000);
 
     // Fill out the form fields
