@@ -42,5 +42,8 @@ STOPSIGNAL SIGTERM
 # Expose port
 EXPOSE 8080
 
+# Make node_modules read-only and remove npm/npx to prevent runtime mutation
+RUN chmod -R 555 node_modules && rm -f /usr/local/bin/npm /usr/local/bin/npx
+
 # Use the entrypoint script
 ENTRYPOINT ["/entrypoint.sh"] 
