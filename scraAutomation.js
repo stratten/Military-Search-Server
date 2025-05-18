@@ -52,8 +52,17 @@ async function runScraAutomation({
         '--no-first-run',
         '--no-zygote',
         '--single-process',
-        '--disable-gpu'
-      ]
+        '--disable-gpu',
+        '--disable-web-security',
+        '--disable-features=IsolateOrigins,site-per-process'
+      ],
+      firefoxUserPrefs: {
+        'network.http.sendRefererHeader': 0,
+        'browser.cache.disk.enable': false,
+        'browser.cache.memory.enable': false,
+        'browser.cache.offline.enable': false,
+        'network.http.use-cache': false
+      }
     });
     
     // Use a common user agent for better compatibility
@@ -69,16 +78,46 @@ async function runScraAutomation({
       console.log('Attempting to navigate to SCRA page...');
       
       // First try a simpler page to warm up the browser connection
+      console.log('First navigating to Google as a warm-up...');
       await page.goto('https://www.google.com', { timeout: 20000 }).catch(e => {
-        console.log('Warm-up navigation failed, but continuing...');
+        console.log('Warm-up navigation failed, but continuing...', e.message);
       });
       
+      // Take screenshot of Google for debugging
+      await page.screenshot({ path: path.join(process.cwd(), 'screenshot_at_google.png') });
+      console.log('Captured screenshot at Google page');
+      
       // Now try to load the actual SCRA page with longer timeout
-      await page.goto(SCRA_URL, { 
-        waitUntil: 'domcontentloaded', 
-        timeout: 60000 
+      console.log(`Now attempting to navigate to SCRA URL: ${SCRA_URL}`);
+      
+      // Set up request event listeners to see if requests are being made/blocked
+      page.on('request', request => {
+        console.log(`Request issued to: ${request.url()}`);
       });
-      console.log('Successfully navigated to SCRA Single Record Request page');
+      
+      page.on('requestfailed', request => {
+        console.log(`Request failed for: ${request.url()}`);
+        console.log(`Request failure reason: ${request.failure().errorText}`);
+      });
+      
+      page.on('response', response => {
+        console.log(`Response received from: ${response.url()}, status: ${response.status()}`);
+      });
+      
+      try {
+        await page.goto(SCRA_URL, { 
+          waitUntil: 'domcontentloaded', 
+          timeout: 60000 
+        });
+        console.log('Successfully navigated to SCRA Single Record Request page');
+      } catch (navigationError) {
+        console.error('Detailed navigation error:', navigationError);
+        // Take screenshot after failed navigation attempt
+        await page.screenshot({ path: path.join(process.cwd(), 'screenshot_navigation_error.png') });
+        console.log('Captured screenshot after navigation error');
+        // Re-throw to trigger retry
+        throw navigationError;
+      }
     }, 2, 10000);
     
     // Take screenshot after navigation

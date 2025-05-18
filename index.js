@@ -68,11 +68,25 @@ app.post('/scra-request', async (req, res) => {
       matterId,
       callbackUrl,
       Callback_URL__c, // Salesforce custom field format
-      Server_URL__c // Salesforce server URL format
+      Server_URL__c, // Salesforce server URL format
+      endpointUrl // Direct endpoint URL
     } = req.body;
 
-    // Determine the correct callback URL (try different possible formats)
-    const effectiveCallbackUrl = callbackUrl || Callback_URL__c || req.body['Callback_URL__c'] || null;
+    // Clean and normalize the callback URL
+    let effectiveCallbackUrl = callbackUrl || Callback_URL__c || req.body['Callback_URL__c'] || endpointUrl || null;
+    
+    // Process and fix the URL if it exists
+    if (effectiveCallbackUrl) {
+      // Clean tab characters and whitespace
+      effectiveCallbackUrl = effectiveCallbackUrl.replace(/[\t\s]+/g, '');
+      
+      // Add protocol if missing
+      if (!effectiveCallbackUrl.startsWith('http')) {
+        effectiveCallbackUrl = 'https://' + effectiveCallbackUrl;
+      }
+      
+      console.log(`Normalized callback URL: ${effectiveCallbackUrl}`);
+    }
 
     // Log the request (with sensitive data masked)
     console.log('Request data:', {
@@ -82,7 +96,9 @@ app.post('/scra-request', async (req, res) => {
       firstName,
       matterId,
       hasCallbackUrl: !!effectiveCallbackUrl,
-      callbackUrl: effectiveCallbackUrl ? `${effectiveCallbackUrl.substring(0, 15)}...` : 'undefined',
+      callbackUrl: effectiveCallbackUrl ? 
+        `${effectiveCallbackUrl.substring(0, 15)}...${effectiveCallbackUrl.substring(effectiveCallbackUrl.length - 10)}` : 
+        'undefined',
       hasServerUrl: !!(Server_URL__c || req.body['Server_URL__c']),
       originalKeys: Object.keys(req.body)
     });
