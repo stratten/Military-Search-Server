@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/playwright:v1.51.1-jammy
+FROM mcr.microsoft.com/playwright:v1.48.2-focal
 
 # Create app directory
 WORKDIR /app
@@ -6,9 +6,6 @@ WORKDIR /app
 # Install app dependencies
 COPY package*.json ./
 RUN npm install
-
-# Debug: print the installed Playwright version
-RUN npm list playwright
 
 # Install curl for healthcheck
 RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
@@ -41,9 +38,6 @@ STOPSIGNAL SIGTERM
 
 # Expose port
 EXPOSE 8080
-
-# Make node_modules read-only and remove npm/npx to prevent runtime mutation
-RUN chmod -R 555 node_modules && rm -f /usr/local/bin/npm /usr/local/bin/npx
 
 # Use the entrypoint script
 ENTRYPOINT ["/entrypoint.sh"] 
