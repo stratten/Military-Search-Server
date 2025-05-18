@@ -9,6 +9,90 @@ const ROOT_DIR = path.join(__dirname, '..');
 const OUTPUTS_DIR = path.join(ROOT_DIR, 'outputs');
 const LOGS_DIR = path.join(ROOT_DIR, 'logs');
 
+// Global browser instance
+let globalBrowser = null;
+let browserOperationInProgress = false;
+let browserOperationStartTime = null;
+const BROWSER_OPERATION_TIMEOUT_MS = 30 * 1000; // 30 seconds timeout for browser operations
+
+// Initialize browser with retry logic
+async function initBrowser(retryCount = 3) {
+  for (let i = 0; i < retryCount; i++) {
+    try {
+      console.log(`Browser initialization attempt ${i + 1}/${retryCount}`);
+      
+      if (globalBrowser) {
+        console.log('Closing existing browser instance');
+        await globalBrowser.close().catch(console.error);
+        globalBrowser = null;
+      }
+      
+      // Simple, minimal browser launch options similar to court_proxy_app
+      globalBrowser = await firefox.launch({
+        args: [
+          '--no-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-gpu',
+          '--no-first-run',
+          '--no-zygote',
+          '--single-process'
+        ],
+        timeout: 30000,
+        handleSIGINT: false,
+        handleSIGTERM: false,
+        handleSIGHUP: false
+      });
+      
+      // Verify browser health
+      const testContext = await globalBrowser.newContext();
+      await testContext.close();
+      
+      console.log('Browser initialization successful');
+      return globalBrowser;
+    } catch (error) {
+      console.error(`Browser initialization attempt ${i + 1} failed:`, error);
+      if (i === retryCount - 1) {
+        throw new Error(`Failed to initialize browser after ${retryCount} attempts: ${error.message}`);
+      }
+      // Wait before retry
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+  }
+}
+
+// Add browser operation lock function
+async function withBrowserLock(operation) {
+  if (browserOperationInProgress) {
+    // Check if the current operation has timed out
+    const operationTimeMs = Date.now() - browserOperationStartTime;
+    if (operationTimeMs > BROWSER_OPERATION_TIMEOUT_MS) {
+      console.log(`Browser operation timed out after ${Math.round(operationTimeMs/1000)} seconds, forcing reset`);
+      browserOperationInProgress = false;
+      // Force garbage collection if available
+      if (global.gc) {
+        console.log('Forcing garbage collection after operation timeout');
+        global.gc();
+      }
+    } else {
+      console.log(`Browser operation already in progress for ${Math.round(operationTimeMs/1000)} seconds, waiting...`);
+      return null; // Return null to indicate operation was skipped
+    }
+  }
+  
+  try {
+    browserOperationInProgress = true;
+    browserOperationStartTime = Date.now();
+    return await operation();
+  } finally {
+    browserOperationInProgress = false;
+    // Force garbage collection if available
+    if (global.gc) {
+      console.log('Forcing garbage collection after browser operation');
+      global.gc();
+    }
+  }
+}
+
 // Enhanced helper function to implement retry logic with exponential backoff
 async function retry(fn, maxRetries = 3, initialDelay = 5000, maxDelay = 60000, finalError = null) {
   let retries = 0;
@@ -35,7 +119,7 @@ async function retry(fn, maxRetries = 3, initialDelay = 5000, maxDelay = 60000, 
 }
 
 // Safety timeout to detect hanging processes
-function setupSafetyTimeout(timeoutMs = 180000) {
+function setupSafetyTimeout(timeoutMs = 30000) {
   console.log(`Setting up safety timeout for ${timeoutMs/1000} seconds`);
   return setTimeout(() => {
     console.error(`SAFETY TIMEOUT TRIGGERED after ${timeoutMs/1000} seconds - process appears to be hanging`);
@@ -58,6 +142,14 @@ function createRunFolder() {
   
   console.log(`Created output folder for this run: ${runFolder}`);
   return runFolder;
+}
+
+function logDetailedMemoryUsage() {
+  const memUsage = process.memoryUsage();
+  console.log('Memory Usage:');
+  for (const [key, value] of Object.entries(memUsage)) {
+    console.log(`  ${key}: ${Math.round(value / 1024 / 1024 * 100) / 100} MB`);
+  }
 }
 
 // Create a dedicated network request logger
@@ -149,7 +241,7 @@ async function runScraAutomation({
   endpointUrl
 }) {
   // Set a safety timeout to catch hangs
-  const safetyTimeout = setupSafetyTimeout(30000); // 30 seconds
+  let safetyTimeout = setupSafetyTimeout(30000); // 30 seconds
   
   // Create a unique folder for this run's outputs
   const runFolder = createRunFolder();
@@ -164,11 +256,10 @@ async function runScraAutomation({
   });
 
   const SCRA_URL = 'https://scra.dmdc.osd.mil/scra/#/single-record';
-  let browser;
+  let browser = null;
   let networkLogger;
+  
   try {
-    // Enable Playwright's own debugging to get more verbose output
-    process.env.DEBUG = 'pw:api';
     console.log('Initializing browser...');
     
     // Create logs directory if it doesn't exist
@@ -176,47 +267,17 @@ async function runScraAutomation({
       fs.mkdirSync(LOGS_DIR);
     }
     
-    // Set up browser launch options with enhanced settings
-    const launchOptions = { 
-      headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--no-first-run',
-        '--no-zygote',
-        '--single-process',
-        '--disable-gpu',
-        '--disable-web-security',
-        '--disable-features=IsolateOrigins,site-per-process',
-        '--window-size=1920,1080',
-        '--ignore-certificate-errors',
-        '--ignore-certificate-errors-spki-list',
-        '--allow-insecure-localhost'
-      ],
-      firefoxUserPrefs: {
-        'network.http.sendRefererHeader': 0,
-        'browser.cache.disk.enable': false,
-        'browser.cache.memory.enable': false,
-        'browser.cache.offline.enable': false,
-        'network.http.use-cache': false,
-        'network.dns.disablePrefetch': true,
-        'network.prefetch-next': false,
-        'security.tls.enable_0rtt_data': false,
-        'security.cert_pinning.enforcement_level': 0,
-        'security.ssl.require_safe_negotiation': false,
-        'security.ssl.enable_ocsp_stapling': false
-      }
-    };
+    // Initialize browser using the locked operation and retry logic
+    browser = await withBrowserLock(() => initBrowser(3));
+    if (!browser) {
+      throw new Error('Could not get browser lock - another browser operation is in progress');
+    }
     
-    console.log('About to launch browser with options:', JSON.stringify(launchOptions, null, 2));
-    browser = await firefox.launch(launchOptions).catch(e => {
-      console.error('Browser launch failed:', e);
-      throw e;
-    });
-    
-    console.log('Browser launched successfully. Creating browser context...');
+    console.log('Browser initialized successfully. Creating browser context...');
+    // Take screenshot of system state after browser initialization
+    fs.writeFileSync(path.join(runFolder, 'screenshot_after_browser_init.png'), 
+                    Buffer.from('Browser initialized - no visual yet', 'utf8'));
+    logDetailedMemoryUsage();
     
     // Use common user agents that are less likely to be blocked
     const userAgents = [
@@ -229,131 +290,107 @@ async function runScraAutomation({
     const userAgent = userAgents[Math.floor(Math.random() * userAgents.length)];
     console.log(`Using user agent: ${userAgent}`);
     
-    const context = await browser.newContext({ 
+    // Create context with timeout
+    const contextPromise = browser.newContext({ 
       viewport: { width: 1920, height: 1080 },
-      userAgent,
-      ignoreHTTPSErrors: true,
-      extraHTTPHeaders: {
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Sec-Fetch-Dest': 'document',
-        'Sec-Fetch-Mode': 'navigate',
-        'Sec-Fetch-Site': 'none',
-        'Sec-Fetch-User': '?1'
-      }
-    }).catch(e => {
-      console.error('Context creation failed:', e);
-      throw e;
+      userAgent
     });
     
+    // Add timeout to context creation
+    const context = await Promise.race([
+      contextPromise,
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Context creation timed out after 10 seconds')), 10000)
+      )
+    ]);
+    
     console.log('Browser context created. Creating new page...');
-    const page = await context.newPage().catch(e => {
-      console.error('Page creation failed:', e);
-      throw e;
-    });
+    // Take screenshot of system state after context creation
+    fs.writeFileSync(path.join(runFolder, 'screenshot_after_context_creation.png'), 
+                    Buffer.from('Context created - no visual yet', 'utf8'));
+    
+    // Create page with timeout
+    const pagePromise = context.newPage();
+    const page = await Promise.race([
+      pagePromise,
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Page creation timed out after 10 seconds')), 10000)
+      )
+    ]);
+    
+    console.log('Page created successfully.');
+    // Take screenshot of system state after page creation
+    fs.writeFileSync(path.join(runFolder, 'screenshot_after_page_creation.png'), 
+                    Buffer.from('Page created - no visual yet', 'utf8'));
+    
+    // Reset the safety timeout now that we've gotten past the critical initialization stage
+    if (safetyTimeout) {
+      clearTimeout(safetyTimeout);
+      console.log('Initial safety timeout cleared, setting new longer timeout');
+      
+      // Set a longer safety timeout for the rest of the process
+      const extendedTimeout = setupSafetyTimeout(120000); // 2 minutes
+      
+      // Remember to clear this before returning
+      safetyTimeout = extendedTimeout;
+    }
     
     // Set up network logger
     networkLogger = setupNetworkLogging(page, runFolder);
     
-    console.log('Page created successfully.');
-    
-    // Use retry logic for navigating to the page with increased timeout and better error handling
-    await retry(
-      async () => {
-        console.log('Attempting to navigate to SCRA page...');
-        
-        // First try a simpler page to warm up the browser connection
-        console.log('First navigating to Google as a warm-up...');
-        await page.goto('https://www.google.com', { 
-          timeout: 30000,
-          waitUntil: 'domcontentloaded'
-        }).catch(e => {
-          console.log('Warm-up navigation failed, but continuing...', e.message);
-        });
-        
-        // Take screenshot of Google for debugging
-        await page.screenshot({ path: path.join(runFolder, 'screenshot_at_google.png') });
-        console.log('Captured screenshot at Google page');
-        
-        // Now try to load the actual SCRA page with longer timeout
-        console.log(`Now attempting to navigate to SCRA URL: ${SCRA_URL}`);
-        
-        try {
-          // Clear cookies and cache before attempting SCRA site
-          await context.clearCookies();
-          
-          // Try accessing the SCRA site with extended timeout
-          await page.goto(SCRA_URL, { 
-            waitUntil: 'domcontentloaded', 
-            timeout: 90000 // 90 second timeout for government site
-          });
-          
-          // Verify we reached the correct page by checking content
-          const pageTitle = await page.title();
-          const pageContent = await page.content();
-          
-          console.log(`Page title after navigation: ${pageTitle}`);
-          
-          // Check if we're on the right page or were redirected
-          if (pageContent.includes('Access Denied') || pageContent.includes('Forbidden')) {
-            await page.screenshot({ path: path.join(runFolder, 'screenshot_access_denied.png') });
-            throw new Error('Access to SCRA site appears to be denied or blocked');
-          }
-          
-          if (!pageContent.includes('SCRA') && !pageContent.includes('Single Record Request')) {
-            await page.screenshot({ path: path.join(runFolder, 'screenshot_wrong_page.png') });
-            throw new Error('Navigation succeeded but page content does not appear to be SCRA site');
-          }
-          
-          console.log('Successfully navigated to SCRA Single Record Request page');
-        } catch (navigationError) {
-          console.error('Detailed navigation error:', navigationError);
-          
-          // Take screenshot after failed navigation attempt
-          await page.screenshot({ path: path.join(runFolder, 'screenshot_navigation_error.png') });
-          console.log('Captured screenshot after navigation error');
-          
-          // Log network summary
-          if (networkLogger) {
-            networkLogger.logNetworkSummary();
-          }
-          
-          // Re-throw with more context to trigger retry
-          throw new Error(`Navigation failed: ${navigationError.message}`);
-        }
-      }, 
-      3, // max retries 
-      10000, // initial delay (10s)
-      60000 // max delay (60s)
-    );
-    
-    // Take screenshot after successful navigation
-    await page.screenshot({ path: path.join(runFolder, 'screenshot_after_nav.png') });
-    console.log('Screenshot taken after navigation.');
+    // Simplified navigation with direct error handling
+    try {
+      console.log(`Navigating to SCRA URL: ${SCRA_URL}`);
+      await page.screenshot({ path: path.join(runFolder, 'screenshot_before_navigation.png') });
+      await page.goto(SCRA_URL, { timeout: 60000 });
+      console.log(`Successfully loaded page: ${await page.title()}`);
+      
+      // Take screenshot for verification
+      await page.screenshot({ path: path.join(runFolder, 'screenshot_after_nav.png') });
+      console.log('Screenshot taken after navigation.');
+    } catch (navError) {
+      console.error('Navigation error:', navError);
+      await page.screenshot({ path: path.join(runFolder, 'screenshot_nav_error.png') });
+      throw new Error(`Failed to navigate to SCRA site: ${navError.message}`);
+    }
 
     // Handle Privacy Act confirmation modal if present
-    const privacyAcceptBtn = await page.$('button[title="I Accept"]');
-    if (privacyAcceptBtn) {
-      console.log('Privacy confirmation modal detected. Clicking Accept...');
-      await privacyAcceptBtn.click();
-      // Optionally wait for modal to disappear
-      await page.waitForTimeout(500); // Small delay to allow modal to close
-    } else {
-      console.log('No privacy confirmation modal detected.');
+    try {
+      await page.screenshot({ path: path.join(runFolder, 'screenshot_before_privacy_modal.png') });
+      const privacyAcceptBtn = await page.$('button[title="I Accept"]');
+      if (privacyAcceptBtn) {
+        console.log('Privacy confirmation modal detected. Clicking Accept...');
+        await privacyAcceptBtn.click();
+        await page.waitForTimeout(500); // Small delay to allow modal to close
+        await page.screenshot({ path: path.join(runFolder, 'screenshot_after_privacy_modal.png') });
+      } else {
+        console.log('No privacy confirmation modal detected.');
+      }
+    } catch (modalError) {
+      console.log('Error handling privacy modal:', modalError.message);
+      await page.screenshot({ path: path.join(runFolder, 'screenshot_privacy_modal_error.png') });
+      // Continue even if modal handling fails - it might not be present
     }
 
     // Check for login form
+    await page.screenshot({ path: path.join(runFolder, 'screenshot_before_login_check.png') });
     if (await page.$('input#username')) {
       console.log('Login form detected, logging in...');
+      await page.screenshot({ path: path.join(runFolder, 'screenshot_login_form_found.png') });
       try {
         await page.fill('input#username', scraUsername);
+        await page.screenshot({ path: path.join(runFolder, 'screenshot_after_username_filled.png') });
         await page.fill('input#password', scraPassword);
+        await page.screenshot({ path: path.join(runFolder, 'screenshot_after_password_filled.png') });
         
         console.log('Submitting login credentials...');
+        await page.screenshot({ path: path.join(runFolder, 'screenshot_before_login_submit.png') });
         await Promise.all([
           page.click("button[type='submit']"),
           page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 45000 })
         ]);
         console.log('Logged in successfully');
+        await page.screenshot({ path: path.join(runFolder, 'screenshot_after_login.png') });
       } catch (loginError) {
         console.error('Error during login:', loginError.message);
         await page.screenshot({ path: path.join(runFolder, 'screenshot_login_error.png') });
@@ -361,26 +398,35 @@ async function runScraAutomation({
       }
     } else {
       console.log('No login form detected, continuing...');
+      await page.screenshot({ path: path.join(runFolder, 'screenshot_no_login_form.png') });
     }
 
     // Give the page a moment to stabilize after login
     await page.waitForTimeout(2000);
+    await page.screenshot({ path: path.join(runFolder, 'screenshot_after_stabilization.png') });
 
     // Fill out the form fields
     try {
+      await page.screenshot({ path: path.join(runFolder, 'screenshot_before_form_filling.png') });
       // Clean SSN to ensure only digits are submitted
       const cleanedSsn = ssn.replace(/\D/g, '');
       console.log('Filling out SSN...');
       await page.fill('#ssnInput', cleanedSsn);
+      await page.screenshot({ path: path.join(runFolder, 'screenshot_after_ssn_filled.png') });
       await page.fill('#ssnConfirmationInput', cleanedSsn);
+      await page.screenshot({ path: path.join(runFolder, 'screenshot_after_ssn_confirmation_filled.png') });
       console.log('Filling out Last Name...');
       await page.fill('#lastNameInput', lastName);
+      await page.screenshot({ path: path.join(runFolder, 'screenshot_after_lastname_filled.png') });
       console.log('Filling out First Name...');
       await page.fill('#firstNameInput', firstName);
+      await page.screenshot({ path: path.join(runFolder, 'screenshot_after_firstname_filled.png') });
       if (dob) {
         console.log('Filling out Date of Birth...');
         await page.fill('#mat-input-2', dob); // Format: MM/DD/YYYY
+        await page.screenshot({ path: path.join(runFolder, 'screenshot_after_dob_filled.png') });
       }
+      await page.screenshot({ path: path.join(runFolder, 'screenshot_after_form_completed.png') });
     } catch (formError) {
       console.error('Error filling form:', formError.message);
       await page.screenshot({ path: path.join(runFolder, 'screenshot_form_error.png') });
@@ -395,6 +441,7 @@ async function runScraAutomation({
     
     try {
       // Wait longer for the checkbox to appear
+      await page.screenshot({ path: path.join(runFolder, 'screenshot_before_checkbox_wait.png') });
       await page.waitForSelector(checkboxSelector, { state: 'attached', timeout: 20000 });
       await page.screenshot({ path: path.join(runFolder, 'screenshot_before_checkbox.png') });
       console.log('Screenshot taken before attempting to check I Accept checkbox.');
@@ -403,14 +450,18 @@ async function runScraAutomation({
         await page.check(checkboxSelector);
         checkboxFound = true;
         console.log('Checked the checkbox using input[name="termsAgree"]');
+        await page.screenshot({ path: path.join(runFolder, 'screenshot_after_checkbox.png') });
       } catch (e) {
         console.log('Primary check failed, trying to click the label as fallback...', e.message);
+        await page.screenshot({ path: path.join(runFolder, 'screenshot_checkbox_primary_failed.png') });
         try {
           await page.click(labelSelector);
           checkboxFound = true;
           console.log('Checked the checkbox by clicking the label.');
+          await page.screenshot({ path: path.join(runFolder, 'screenshot_after_checkbox_label_click.png') });
         } catch (e2) {
           console.log('Fallback label click also failed.', e2.message);
+          await page.screenshot({ path: path.join(runFolder, 'screenshot_checkbox_label_failed.png') });
           
           // Try a more general approach
           console.log('Trying alternative checkbox methods...');
@@ -422,6 +473,7 @@ async function runScraAutomation({
                 await checkbox.check();
                 checkboxFound = true;
                 console.log('Successfully checked a checkbox using alternative method');
+                await page.screenshot({ path: path.join(runFolder, 'screenshot_after_checkbox_alternative.png') });
                 break;
               } catch (e3) {
                 console.log('Failed to check checkbox, trying next...');
@@ -434,6 +486,7 @@ async function runScraAutomation({
       if (checkboxFound) {
         // Submit the form
         console.log('Clicking Submit button...');
+        await page.screenshot({ path: path.join(runFolder, 'screenshot_before_submit.png') });
         
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         const pdfPath = path.join(runFolder, `scra-result.pdf`);
@@ -446,13 +499,18 @@ async function runScraAutomation({
           ]);
           
           console.log('Download started, waiting for completion...');
+          await page.screenshot({ path: path.join(runFolder, 'screenshot_download_started.png') });
           await download.saveAs(pdfPath);
           console.log(`PDF downloaded and saved to: ${pdfPath}`);
+          await page.screenshot({ path: path.join(runFolder, 'screenshot_after_download.png') });
 
           // Parse the PDF to determine proofOfMilitaryServiceFound
           const fileData = fs.readFileSync(pdfPath);
           const pdfData = await pdfParse(fileData);
           const pdfText = pdfData.text;
+          
+          console.log('PDF parsed, analyzing content');
+          await page.screenshot({ path: path.join(runFolder, 'screenshot_pdf_parsing.png') });
           
           // Simple heuristic: look for any value in the relevant sections that is not 'NA' or 'No'
           let proofOfMilitaryServiceFound = 'No';
@@ -496,6 +554,7 @@ async function runScraAutomation({
               timestamp: new Date().toISOString()
             }, null, 2)
           );
+          await page.screenshot({ path: path.join(runFolder, 'screenshot_before_callback.png') });
 
           // POST to endpoint if provided
           if (endpointUrl) {
@@ -525,6 +584,7 @@ async function runScraAutomation({
               });
               
               console.log(`POST to endpoint succeeded: ${postResp.status} ${postResp.statusText}`);
+              await page.screenshot({ path: path.join(runFolder, 'screenshot_after_callback.png') });
               
               // Check if response contains HTML instead of JSON
               const isHtmlResponse = 
@@ -555,6 +615,7 @@ async function runScraAutomation({
               );
             } catch (err) {
               console.error('POST to endpoint failed:', err.response ? err.response.data : err.message);
+              await page.screenshot({ path: path.join(runFolder, 'screenshot_callback_error.png') });
               
               // Save error information
               fs.writeFileSync(
@@ -580,6 +641,7 @@ async function runScraAutomation({
           throw new Error(`Form submission failed: ${downloadError.message}`);
         }
       } else {
+        await page.screenshot({ path: path.join(runFolder, 'screenshot_checkbox_not_found.png') });
         throw new Error('I Accept checkbox not found or not interactable after multiple attempts.');
       }
     } catch (checkboxError) {

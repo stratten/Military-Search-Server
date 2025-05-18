@@ -1,87 +1,39 @@
-FROM node:18-slim
+FROM mcr.microsoft.com/playwright:v1.48.2-focal
 
-# Install system utilities for debugging
-RUN apt-get update && apt-get install -y \
-    procps \
-    lsof \
-    net-tools \
-    curl \
-    dnsutils \
-    iputils-ping \
-    htop \
-    vim \
-    ca-certificates
-
-# Install Firefox dependencies
-RUN apt-get update && apt-get install -y \
-    libx11-xcb1 \
-    libxcb-dri3-0 \
-    libxcb1 \
-    libxcomposite1 \
-    libxcursor1 \
-    libxdamage1 \
-    libxext6 \
-    libxfixes3 \
-    libxi6 \
-    libxrandr2 \
-    libxrender1 \
-    libxss1 \
-    libxtst6 \
-    libgtk-3-0 \
-    libdbus-glib-1-2 \
-    libxt6 \
-    libpci3 \
-    libasound2 \
-    libcups2 \
-    libxcb-shm0 \
-    libpangocairo-1.0-0 \
-    libpango-1.0-0 \
-    libatk1.0-0 \
-    libcairo-gobject2 \
-    libcairo2 \
-    libgdk-pixbuf-2.0-0 \
-    libglib2.0-0 \
-    libfreetype6 \
-    libfontconfig1 \
-    libdbus-1-3 \
-    xvfb \
-    fonts-liberation \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
-
-# Set up Xvfb for headless execution
-ENV DISPLAY=:99
-RUN echo '#!/bin/bash\n# Remove lock file if it exists to prevent startup issues\nrm -f /tmp/.X99-lock\nXvfb :99 -screen 0 1280x1024x24 &\nexec "$@"' > /entrypoint.sh \
-    && chmod +x /entrypoint.sh
-
-# Create and set working directory
+# Create app directory
 WORKDIR /app
 
-# Copy package files
+# Install app dependencies
 COPY package*.json ./
-
-# Install dependencies
 RUN npm install
 
-# Copy source files
+# Bundle app source
 COPY . .
 
-# Create directories for logs and outputs
+# Create directories for logs and outputs with world-writable permissions
 RUN mkdir -p /app/logs /app/outputs \
     && chmod -R 777 /app/logs /app/outputs
 
-# Install Playwright with Firefox and its dependencies
-RUN npx playwright install firefox --with-deps
+# Set environment variables
+ENV NODE_ENV=production
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+# Enable garbage collection
+ENV NODE_OPTIONS="--expose-gc"
 
 # Expose port
 EXPOSE 8080
 
-# Set environment variables
-ENV NODE_ENV=production
-ENV NODE_OPTIONS=--max-old-space-size=4096
+# Add always restart policy
+LABEL com.centurylinklabs.watchtower.enable="true"
+LABEL autoheal=true
 
-# Use our entrypoint script
-ENTRYPOINT ["/entrypoint.sh"]
+# Simple health check
+HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:8080/health || exit 1
 
-# Start the application
-CMD ["npm", "start"] 
+# Create a simple entrypoint script
+RUN echo '#!/bin/bash\nset -e\n\n# Forward SIGTERM to the Node.js process\ntrap '\''kill -TERM $NODE_PID'\'' TERM INT\n\n# Start Node.js in the background\nnpm start &\nNODE_PID=$!\n\n# Wait for Node.js to terminate\nwait $NODE_PID\n\n# Exit with the same code as Node.js\nexit $?' > /entrypoint.sh \
+    && chmod +x /entrypoint.sh
+
+# Use the entrypoint script
+ENTRYPOINT ["/entrypoint.sh"] 
