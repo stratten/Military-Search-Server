@@ -7,8 +7,8 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install
 
-# Explicitly install Playwright browsers
-RUN npx playwright install firefox
+# Install all Playwright browsers
+RUN npx playwright install
 
 # Bundle app source
 COPY . .
