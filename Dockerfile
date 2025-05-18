@@ -51,7 +51,7 @@ RUN apt-get update && apt-get install -y \
 
 # Set up Xvfb for headless execution
 ENV DISPLAY=:99
-RUN echo '#!/bin/bash\nXvfb :99 -screen 0 1280x1024x24 &\nexec "$@"' > /entrypoint.sh \
+RUN echo '#!/bin/bash\n# Remove lock file if it exists to prevent startup issues\nrm -f /tmp/.X99-lock\nXvfb :99 -screen 0 1280x1024x24 &\nexec "$@"' > /entrypoint.sh \
     && chmod +x /entrypoint.sh
 
 # Create and set working directory

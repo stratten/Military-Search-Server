@@ -149,7 +149,7 @@ async function runScraAutomation({
   endpointUrl
 }) {
   // Set a safety timeout to catch hangs
-  const safetyTimeout = setupSafetyTimeout(300000); // 5 minutes
+  const safetyTimeout = setupSafetyTimeout(30000); // 30 seconds
   
   // Create a unique folder for this run's outputs
   const runFolder = createRunFolder();
