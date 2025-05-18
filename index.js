@@ -1,5 +1,7 @@
 const express = require('express');
 const { runScraAutomation } = require('./scraAutomation');
+const path = require('path');
+const fs = require('fs');
 const app = express();
 const PORT = process.env.PORT || 8080; // Match the actual port being used
 
@@ -8,6 +10,45 @@ app.use(express.json());
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok' });
+});
+
+// Endpoint to serve screenshots
+app.get('/screenshots/:filename', (req, res) => {
+  const filename = req.params.filename;
+  // Only allow PNG files for security
+  if (!filename.match(/^[a-zA-Z0-9_-]+\.png$/)) {
+    return res.status(400).send('Invalid filename');
+  }
+
+  const filePath = path.join(process.cwd(), filename);
+  
+  // Check if file exists
+  if (fs.existsSync(filePath)) {
+    res.sendFile(filePath);
+  } else {
+    res.status(404).send('Screenshot not found');
+  }
+});
+
+// Endpoint to list available screenshots
+app.get('/screenshots', (req, res) => {
+  try {
+    const files = fs.readdirSync(process.cwd())
+      .filter(file => file.startsWith('screenshot_') && file.endsWith('.png'));
+    
+    const screenshotUrls = files.map(file => {
+      return {
+        name: file,
+        url: `${req.protocol}://${req.get('host')}/screenshots/${file}`,
+        timestamp: fs.statSync(path.join(process.cwd(), file)).mtime
+      };
+    });
+    
+    res.json(screenshotUrls);
+  } catch (error) {
+    console.error('Error listing screenshots:', error);
+    res.status(500).send('Error listing screenshots');
+  }
 });
 
 // POST endpoint to receive SCRA requests from Salesforce
