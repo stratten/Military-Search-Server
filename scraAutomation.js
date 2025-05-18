@@ -4,6 +4,20 @@ const fs = require('fs');
 const pdfParse = require('pdf-parse');
 const axios = require('axios');
 
+// Helper function to implement retry logic
+async function retry(fn, retries = 3, delay = 5000, finalError = null) {
+  try {
+    return await fn();
+  } catch (error) {
+    if (retries <= 0) {
+      throw finalError || error;
+    }
+    console.log(`Attempt failed, retrying in ${delay/1000} seconds... (${retries} retries left)`);
+    await new Promise(resolve => setTimeout(resolve, delay));
+    return retry(fn, retries - 1, delay, error);
+  }
+}
+
 async function runScraAutomation({
   ssn,
   dob,
@@ -41,12 +55,33 @@ async function runScraAutomation({
         '--disable-gpu'
       ]
     });
-    const context = await browser.newContext({ viewport: { width: 1200, height: 1600 } });
+    
+    // Use a common user agent for better compatibility
+    const context = await browser.newContext({ 
+      viewport: { width: 1200, height: 1600 },
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36'
+    });
+    
     const page = await context.newPage();
-    await page.goto(SCRA_URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    console.log('Navigated to SCRA Single Record Request page');
-
-    // Screenshot after navigation
+    
+    // Use retry logic for navigating to the page with increased timeout
+    await retry(async () => {
+      console.log('Attempting to navigate to SCRA page...');
+      
+      // First try a simpler page to warm up the browser connection
+      await page.goto('https://www.google.com', { timeout: 20000 }).catch(e => {
+        console.log('Warm-up navigation failed, but continuing...');
+      });
+      
+      // Now try to load the actual SCRA page with longer timeout
+      await page.goto(SCRA_URL, { 
+        waitUntil: 'domcontentloaded', 
+        timeout: 60000 
+      });
+      console.log('Successfully navigated to SCRA Single Record Request page');
+    }, 2, 10000);
+    
+    // Take screenshot after navigation
     await page.screenshot({ path: path.join(process.cwd(), 'screenshot_after_nav.png') });
     console.log('Screenshot taken after navigation.');
 
@@ -64,114 +99,174 @@ async function runScraAutomation({
     // Check for login form
     if (await page.$('input#username')) {
       console.log('Login form detected, logging in...');
-      await page.fill('input#username', scraUsername);
-      await page.fill('input#password', scraPassword);
-      await Promise.all([
-        page.click("button[type='submit']"),
-        page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 20000 })
-      ]);
-      console.log('Logged in successfully');
+      try {
+        await page.fill('input#username', scraUsername);
+        await page.fill('input#password', scraPassword);
+        
+        console.log('Submitting login credentials...');
+        await Promise.all([
+          page.click("button[type='submit']"),
+          page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 45000 })
+        ]);
+        console.log('Logged in successfully');
+      } catch (loginError) {
+        console.error('Error during login:', loginError.message);
+        await page.screenshot({ path: path.join(process.cwd(), 'screenshot_login_error.png') });
+        throw new Error(`Login failed: ${loginError.message}`);
+      }
     } else {
       console.log('No login form detected, continuing...');
     }
 
+    // Give the page a moment to stabilize after login
+    await page.waitForTimeout(2000);
+
     // Fill out the form fields
-    // Clean SSN to ensure only digits are submitted
-    const cleanedSsn = ssn.replace(/\D/g, '');
-    console.log('Filling out SSN...');
-    await page.fill('#ssnInput', cleanedSsn);
-    await page.fill('#ssnConfirmationInput', cleanedSsn);
-    console.log('Filling out Last Name...');
-    await page.fill('#lastNameInput', lastName);
-    console.log('Filling out First Name...');
-    await page.fill('#firstNameInput', firstName);
-    if (dob) {
-      console.log('Filling out Date of Birth...');
-      await page.fill('#mat-input-2', dob); // Format: MM/DD/YYYY
+    try {
+      // Clean SSN to ensure only digits are submitted
+      const cleanedSsn = ssn.replace(/\D/g, '');
+      console.log('Filling out SSN...');
+      await page.fill('#ssnInput', cleanedSsn);
+      await page.fill('#ssnConfirmationInput', cleanedSsn);
+      console.log('Filling out Last Name...');
+      await page.fill('#lastNameInput', lastName);
+      console.log('Filling out First Name...');
+      await page.fill('#firstNameInput', firstName);
+      if (dob) {
+        console.log('Filling out Date of Birth...');
+        await page.fill('#mat-input-2', dob); // Format: MM/DD/YYYY
+      }
+    } catch (formError) {
+      console.error('Error filling form:', formError.message);
+      await page.screenshot({ path: path.join(process.cwd(), 'screenshot_form_error.png') });
+      throw new Error(`Form filling failed: ${formError.message}`);
     }
+
     // Accept terms
     console.log('Waiting for I Accept checkbox to be attached...');
     const checkboxSelector = 'input[name="termsAgree"]';
     const labelSelector = 'label[for="mat-mdc-checkbox-7-input"]';
     let checkboxFound = false;
-    await page.waitForSelector(checkboxSelector, { state: 'attached', timeout: 10000 });
-    await page.screenshot({ path: path.join(process.cwd(), 'screenshot_before_checkbox.png') });
-    console.log('Screenshot taken before attempting to check I Accept checkbox.');
+    
     try {
-      await page.check(checkboxSelector);
-      checkboxFound = true;
-      console.log('Checked the checkbox using input[name="termsAgree"]');
-    } catch (e) {
-      console.log('Primary check failed, trying to click the label as fallback...');
+      // Wait longer for the checkbox to appear
+      await page.waitForSelector(checkboxSelector, { state: 'attached', timeout: 20000 });
+      await page.screenshot({ path: path.join(process.cwd(), 'screenshot_before_checkbox.png') });
+      console.log('Screenshot taken before attempting to check I Accept checkbox.');
+      
       try {
-        await page.click(labelSelector);
+        await page.check(checkboxSelector);
         checkboxFound = true;
-        console.log('Checked the checkbox by clicking the label.');
-      } catch (e2) {
-        console.log('Fallback label click also failed.');
-      }
-    }
-    if (checkboxFound) {
-      // Submit the form
-      console.log('Clicking Submit button...');
-      // Set up download handling
-      const outputDir = path.join(process.cwd(), 'outputs');
-      if (!fs.existsSync(outputDir)) {
-        fs.mkdirSync(outputDir);
-      }
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const pdfPath = path.join(outputDir, `scra-result-${timestamp}.pdf`);
-      const [ download ] = await Promise.all([
-        page.waitForEvent('download', { timeout: 20000 }),
-        page.click('button[name="SubmitButton"]'),
-      ]);
-      await download.saveAs(pdfPath);
-      console.log(`PDF downloaded and saved to: ${pdfPath}`);
-
-      // Parse the PDF to determine proofOfMilitaryServiceFound
-      const fileData = fs.readFileSync(pdfPath);
-      const pdfData = await pdfParse(fileData);
-      const pdfText = pdfData.text;
-      // Simple heuristic: look for any value in the relevant sections that is not 'NA' or 'No'
-      // (You may want to refine this based on actual PDF structure)
-      let proofOfMilitaryServiceFound = 'No';
-      const regex = /Start Date[\s\S]*?Service Component[\s\S]*?(\w+)/i;
-      // Look for lines after the relevant headers
-      const lines = pdfText.split(/\r?\n/);
-      let inTable = false;
-      for (const line of lines) {
-        if (/Start Date/i.test(line)) inTable = true;
-        if (inTable && /Service Component/i.test(line)) inTable = false;
-        if (inTable) {
-          if (!/\b(NA|No)\b/i.test(line) && /\w/.test(line)) {
-            proofOfMilitaryServiceFound = 'Yes';
-            break;
+        console.log('Checked the checkbox using input[name="termsAgree"]');
+      } catch (e) {
+        console.log('Primary check failed, trying to click the label as fallback...', e.message);
+        try {
+          await page.click(labelSelector);
+          checkboxFound = true;
+          console.log('Checked the checkbox by clicking the label.');
+        } catch (e2) {
+          console.log('Fallback label click also failed.', e2.message);
+          
+          // Try a more general approach
+          console.log('Trying alternative checkbox methods...');
+          const checkboxes = await page.$$('input[type="checkbox"]');
+          if (checkboxes.length > 0) {
+            console.log(`Found ${checkboxes.length} checkboxes, trying to click each...`);
+            for (const checkbox of checkboxes) {
+              try {
+                await checkbox.check();
+                checkboxFound = true;
+                console.log('Successfully checked a checkbox using alternative method');
+                break;
+              } catch (e3) {
+                console.log('Failed to check checkbox, trying next...');
+              }
+            }
           }
         }
       }
-      console.log(`proofOfMilitaryServiceFound: ${proofOfMilitaryServiceFound}`);
-
-      // POST to endpoint if provided
-      if (endpointUrl) {
-        try {
-          const postPayload = {
-            matterId,
-            proofOfMilitaryServiceFound,
-            pdf: fileData.toString('base64')
-          };
-          const postResp = await axios.post(endpointUrl, postPayload, {
-            headers: { 'Content-Type': 'application/json' }
-          });
-          console.log(`POST to SF endpoint succeeded: ${postResp.status} ${postResp.statusText}`);
-        } catch (err) {
-          console.error('POST to SF endpoint failed:', err.response ? err.response.data : err.message);
+      
+      if (checkboxFound) {
+        // Submit the form
+        console.log('Clicking Submit button...');
+        // Set up download handling
+        const outputDir = path.join(process.cwd(), 'outputs');
+        if (!fs.existsSync(outputDir)) {
+          fs.mkdirSync(outputDir);
         }
-      }
-    } else {
-      throw new Error('I Accept checkbox not found or not interactable.');
-    }
+        
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const pdfPath = path.join(outputDir, `scra-result-${timestamp}.pdf`);
+        
+        try {
+          // Use a longer timeout for the download
+          const [ download ] = await Promise.all([
+            page.waitForEvent('download', { timeout: 45000 }),
+            page.click('button[name="SubmitButton"]'),
+          ]);
+          
+          console.log('Download started, waiting for completion...');
+          await download.saveAs(pdfPath);
+          console.log(`PDF downloaded and saved to: ${pdfPath}`);
 
-    // Do not handle PDF download yet
+          // Parse the PDF to determine proofOfMilitaryServiceFound
+          const fileData = fs.readFileSync(pdfPath);
+          const pdfData = await pdfParse(fileData);
+          const pdfText = pdfData.text;
+          
+          // Simple heuristic: look for any value in the relevant sections that is not 'NA' or 'No'
+          let proofOfMilitaryServiceFound = 'No';
+          const lines = pdfText.split(/\r?\n/);
+          let inTable = false;
+          
+          for (const line of lines) {
+            if (/Start Date/i.test(line)) inTable = true;
+            if (inTable && /Service Component/i.test(line)) inTable = false;
+            if (inTable) {
+              if (!/\b(NA|No)\b/i.test(line) && /\w/.test(line)) {
+                proofOfMilitaryServiceFound = 'Yes';
+                break;
+              }
+            }
+          }
+          console.log(`proofOfMilitaryServiceFound: ${proofOfMilitaryServiceFound}`);
+
+          // POST to endpoint if provided
+          if (endpointUrl) {
+            try {
+              console.log(`Sending results to callback URL: ${endpointUrl.substring(0, 30)}...`);
+              const postPayload = {
+                matterId,
+                proofOfMilitaryServiceFound,
+                pdf: fileData.toString('base64')
+              };
+              
+              const postResp = await axios.post(endpointUrl, postPayload, {
+                headers: { 'Content-Type': 'application/json' },
+                timeout: 30000 // 30 second timeout for the callback
+              });
+              
+              console.log(`POST to endpoint succeeded: ${postResp.status} ${postResp.statusText}`);
+            } catch (err) {
+              console.error('POST to endpoint failed:', err.response ? err.response.data : err.message);
+              throw new Error(`Failed to send results: ${err.message}`);
+            }
+          } else {
+            console.log('No endpoint URL provided, skipping results submission');
+          }
+        } catch (downloadError) {
+          console.error('Error during form submission or download:', downloadError.message);
+          await page.screenshot({ path: path.join(process.cwd(), 'screenshot_download_error.png') });
+          throw new Error(`Form submission failed: ${downloadError.message}`);
+        }
+      } else {
+        throw new Error('I Accept checkbox not found or not interactable after multiple attempts.');
+      }
+    } catch (checkboxError) {
+      console.error('Error with checkbox handling:', checkboxError.message);
+      await page.screenshot({ path: path.join(process.cwd(), 'screenshot_checkbox_error.png') });
+      throw checkboxError;
+    }
   } catch (err) {
     console.error('Error during SCRA automation:', err);
     if (browser) {

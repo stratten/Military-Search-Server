@@ -22,12 +22,12 @@
   },
   "railway": {
     "variables": {
-      "NODE_OPTIONS": "--max-old-space-size=2048",
+      "NODE_OPTIONS": "--max-old-space-size=4096",
       "NODE_ENV": "production"
     },
     "resources": {
-      "memory": "4GB",
-      "cpu": "2vCPU"
+      "memory": "32GB",
+      "cpu": "32vCPU"
     }
   }
 }
