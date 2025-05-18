@@ -329,7 +329,7 @@ async function runScraAutomation({
       console.log('Initial safety timeout cleared, setting new longer timeout');
       
       // Set a longer safety timeout for the rest of the process
-      const extendedTimeout = setupSafetyTimeout(120000); // 2 minutes
+      const extendedTimeout = setupSafetyTimeout(30000); // 30 seconds
       
       // Remember to clear this before returning
       safetyTimeout = extendedTimeout;

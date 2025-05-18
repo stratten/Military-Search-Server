@@ -6,8 +6,7 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "test": "node config/testScraAutomation.js",
-    "postinstall": "npx playwright install firefox && npx playwright install-deps"
+    "test": "node config/testScraAutomation.js"
   },
   "dependencies": {
     "express": "^4.18.2",
