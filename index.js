@@ -1,48 +1,83 @@
 const express = require('express');
 const { runScraAutomation } = require('./scraAutomation');
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8080; // Match the actual port being used
 
 app.use(express.json());
 
-// POST endpoint to receive SCRA requests from Salesforce
-app.post('/scra-request', async (req, res) => {
-  const {
-    ssn,
-    dob, // optional
-    lastName,
-    firstName,
-    scraUsername,
-    scraPassword,
-    matterId,
-    callbackUrl // Adding callback URL from Salesforce
-  } = req.body;
-
-  console.log('Received request with data:', {
-    ssn: '***-**-' + (ssn ? ssn.slice(-4) : 'NONE'),
-    dob: dob || 'NONE',
-    lastName,
-    firstName,
-    matterId,
-    callbackUrl
-  });
-
-  // Call the automation function and wait for it to complete
-  await runScraAutomation({
-    ssn,
-    dob,
-    lastName,
-    firstName,
-    scraUsername,
-    scraPassword,
-    matterId,
-    endpointUrl: callbackUrl // Pass callback URL as endpointUrl
-  });
-
-  // Respond with a simple acknowledgment
-  res.status(200).json({ message: 'Request received and automation started' });
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok' });
 });
 
-app.listen(PORT, () => {
+// POST endpoint to receive SCRA requests from Salesforce
+app.post('/scra-request', async (req, res) => {
+  try {
+    console.log('Received SCRA request');
+    
+    const {
+      ssn,
+      dob, // optional
+      lastName,
+      firstName,
+      scraUsername,
+      scraPassword,
+      matterId,
+      callbackUrl // Adding callback URL from Salesforce
+    } = req.body;
+
+    // Log the request (with sensitive data masked)
+    console.log('Request data:', {
+      ssn: ssn ? `***-**-${ssn.replace(/\D/g, '').slice(-4)}` : 'NONE',
+      dob: dob || 'NONE',
+      lastName,
+      firstName,
+      matterId,
+      hasCallbackUrl: !!callbackUrl
+    });
+
+    // Send immediate response to prevent timeout
+    res.status(202).json({ message: 'Request received and automation started' });
+
+    // Then run the automation asynchronously
+    runScraAutomation({
+      ssn,
+      dob,
+      lastName,
+      firstName,
+      scraUsername,
+      scraPassword,
+      matterId,
+      endpointUrl: callbackUrl
+    }).catch(err => {
+      console.error('Error in automation process (caught in index.js):', err.message);
+    });
+  } catch (error) {
+    console.error('Error handling request:', error);
+    // If we haven't sent a response yet, send an error
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+});
+
+const server = app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
+});
+
+// Handle graceful shutdown
+['SIGINT', 'SIGTERM'].forEach(signal => {
+  process.on(signal, () => {
+    console.log(`Received ${signal}, gracefully shutting down...`);
+    server.close(() => {
+      console.log('HTTP server closed');
+      process.exit(0);
+    });
+    
+    // Force exit after 5 seconds if closing takes too long
+    setTimeout(() => {
+      console.log('Forcing shutdown after timeout');
+      process.exit(1);
+    }, 5000);
+  });
 }); 
