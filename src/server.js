@@ -2,6 +2,14 @@ const express = require('express');
 const { runScraAutomation } = require('./scraAutomation');
 const path = require('path');
 const fs = require('fs');
+
+// Log Playwright version at runtime
+try {
+  console.log('Playwright version at runtime:', require('playwright/package.json').version);
+} catch (e) {
+  console.log('Could not determine Playwright version at runtime:', e.message);
+}
+
 const app = express();
 const PORT = process.env.PORT || 8080; // Match the actual port being used
 
