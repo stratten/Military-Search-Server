@@ -248,6 +248,7 @@ async function runScraAutomation({
       console.error('Page creation failed:', e);
       throw e;
     });
+    console.log('page object created, proceeding to network logger setup.');
     
     // Set up network logger
     networkLogger = setupNetworkLogging(page, runFolder);
