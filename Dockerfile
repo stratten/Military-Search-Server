@@ -17,8 +17,6 @@ RUN mkdir -p /app/logs /app/outputs \
 # Set environment variables
 ENV NODE_ENV=production
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
-# Enable garbage collection
-ENV NODE_OPTIONS="--expose-gc"
 
 # Expose port
 EXPOSE 8080
