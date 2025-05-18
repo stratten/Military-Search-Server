@@ -167,6 +167,8 @@ async function runScraAutomation({
   let browser;
   let networkLogger;
   try {
+    // Enable Playwright's own debugging to get more verbose output
+    process.env.DEBUG = 'pw:api';
     console.log('Initializing browser...');
     
     // Create logs directory if it doesn't exist
