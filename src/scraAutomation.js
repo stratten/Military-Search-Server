@@ -269,10 +269,44 @@ async function runScraAutomation({
     console.log('page object created, proceeding to network logger setup.');
     
     // Set up network logger
+    // networkLogger = setupNetworkLogging(page, runFolder); // Temporarily disable for testing newPage hang
+    
+    console.log('Page created successfully. (Network logger setup skipped for this test)');
+
+    // TEST: Try to navigate to Google and take a screenshot immediately
+    try {
+      console.log('Attempting simple navigation to Google (diagnostics for newPage hang)...');
+      await page.goto('https://www.google.com', { timeout: 30000, waitUntil: 'domcontentloaded' });
+      console.log('Successfully navigated to Google (diagnostics).');
+      await page.screenshot({ path: path.join(runFolder, 'screenshot_diagnostic_google.png') });
+      console.log('Diagnostic screenshot of Google saved.');
+      
+      // Intentionally stop here for this diagnostic test
+      console.log('Diagnostic test complete. Intentionally stopping.');
+      if (browser) await browser.close();
+      clearTimeout(safetyTimeout);
+      return; // Exit early
+
+    } catch (e) {
+      console.error('Error during diagnostic Google navigation:', e.message);
+      await page.screenshot({ path: path.join(runFolder, 'screenshot_diagnostic_google_error.png') });
+      if (browser) await browser.close();
+      clearTimeout(safetyTimeout);
+      throw e; // Re-throw
+    }
+    // --- END OF DIAGNOSTIC BLOCK ---
+/*
+    // Original code resumes here, temporarily commented out
+    
+    // Set up network logger
     networkLogger = setupNetworkLogging(page, runFolder);
     
     console.log('Page created successfully.');
     
+    // Use retry logic for navigating to the page with increased timeout and better error handling
+    // ... (rest of the original code commented out for this test)
+*/
+
     // Use retry logic for navigating to the page with increased timeout and better error handling
     await retry(
       async () => {
