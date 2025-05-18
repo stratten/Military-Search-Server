@@ -1,4 +1,4 @@
-const { runScraAutomation } = require('./scraAutomation');
+const { runScraAutomation } = require('../src/scraAutomation');
 const testConstants = require('./testConstants');
 
 (async () => {
