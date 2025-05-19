@@ -37,7 +37,7 @@ app.get('/screenshots/:runFolder/:filename', (req, res) => {
   }
 
   // Only allow valid run folder names for security
-  if (!runFolder.match(/^run-[0-9T\-:\.]+$/)) {
+  if (!runFolder.match(/^run-[0-9T\-:\.Z]+$/)) {
     return res.status(400).send('Invalid run folder');
   }
 
@@ -148,7 +148,7 @@ app.get('/pdfs/:runFolder/:filename', (req, res) => {
   }
 
   // Only allow valid run folder names for security
-  if (!runFolder.match(/^run-[0-9T\-:\.]+$/)) {
+  if (!runFolder.match(/^run-[0-9T\-:\.Z]+$/)) {
     return res.status(400).send('Invalid run folder');
   }
 
@@ -216,7 +216,7 @@ app.get('/network-logs/:runFolder', (req, res) => {
     const { runFolder } = req.params;
     
     // Validate run folder format
-    if (!runFolder.match(/^run-[0-9T\-:\.]+$/)) {
+    if (!runFolder.match(/^run-[0-9T\-:\.Z]+$/)) {
       return res.status(400).send('Invalid run folder');
     }
     

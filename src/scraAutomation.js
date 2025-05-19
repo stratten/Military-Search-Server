@@ -351,10 +351,17 @@ async function runScraAutomation({
     
     // Simplified navigation with direct error handling
     try {
+      // Connectivity check: navigate to Google to confirm Internet access
+      console.log('Connectivity check: navigating to Google');
+      await page.goto('https://www.google.com', { timeout: 60000, waitUntil: 'domcontentloaded' });
+      await page.screenshot({ path: path.join(runFolder, nextScreenshotName('screenshot_google_connectivity.png')) });
+      logScreenshotUrl(path.basename(runFolder), nextScreenshotName('screenshot_google_connectivity.png'));
+      console.log('Connectivity test completed successfully');
       console.log(`Navigating to SCRA URL: ${SCRA_URL}`);
       await page.screenshot({ path: path.join(runFolder, nextScreenshotName('screenshot_before_navigation.png')) });
       logScreenshotUrl(path.basename(runFolder), nextScreenshotName('screenshot_before_navigation.png'));
-      await page.goto(SCRA_URL, { timeout: 60000 });
+      // Retry navigation up to 3 times in case of transient issues
+      await retry(() => page.goto(SCRA_URL, { timeout: 60000, waitUntil: 'domcontentloaded' }), 3, 1000, 60000, new Error('Failed to navigate to SCRA site after 3 attempts'));
       console.log(`Successfully loaded page: ${await page.title()}`);
       // Take screenshot for verification
       await page.screenshot({ path: path.join(runFolder, nextScreenshotName('screenshot_after_nav.png')) });
