@@ -2,6 +2,7 @@ const express = require('express');
 const { runScraAutomation } = require('./scraAutomation');
 const path = require('path');
 const fs = require('fs');
+const axios = require('axios');
 const app = express();
 const PORT = process.env.PORT || 8080; // Match the actual port being used
 
@@ -25,6 +26,21 @@ app.use(express.json());
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok' });
+});
+
+// New endpoint to probe the DMDC SCRA URL
+app.get('/scra-probe', async (req, res) => {
+  try {
+    const response = await axios.get('https://scra.dmdc.osd.mil/scra/');
+    res.status(response.status).send(response.data);
+  } catch (error) {
+    console.error('Error probing DMDC SCRA:', error);
+    if (error.response) {
+      res.status(error.response.status).send(error.response.data);
+    } else {
+      res.status(500).json({ error: error.message });
+    }
+  }
 });
 
 // Endpoint to serve screenshots from run folders
