@@ -363,7 +363,16 @@ async function runScraAutomation({
       console.log('Connectivity check: navigating to Google');
       await page.goto('https://www.google.com', { timeout: 60000, waitUntil: 'domcontentloaded' });
       await snap('screenshot_google_connectivity.png'); // Use snap helper
-      console.log('Connectivity test completed successfully'); // Log after successful snap
+      console.log('Connectivity test completed successfully');
+      // Raw HTTP GET test to the SCRA site (without fragment) to distinguish network-level blocking
+      const rawScrUrl = SCRA_URL.split('#')[0];
+      console.log(`Testing raw HTTP connectivity to ${rawScrUrl}`);
+      try {
+        const resp = await axios.get(rawScrUrl, { timeout: 60000 });
+        console.log(`Raw GET succeeded: ${resp.status} ${resp.statusText}`);
+      } catch (error) {
+        console.error(`Raw GET failed: ${error.message}`);
+      }
       
       console.log(`Navigating to SCRA URL: ${SCRA_URL}`);
       await snap('screenshot_before_navigation.png'); // Use snap helper
