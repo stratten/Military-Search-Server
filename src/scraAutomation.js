@@ -623,7 +623,8 @@ async function runScraAutomation({
               const sfPayload = {
                 matterId: matterId,
                 proofOfMilitaryServiceFound: proofOfMilitaryServiceFound,
-                pdfBase64: pdfFileData.toString('base64')
+                pdfBase64: pdfFileData.toString('base64'),
+                pdfFileName: finalPdfName
               };
               
               // Debug the payload size
