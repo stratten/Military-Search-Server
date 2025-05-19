@@ -6,5 +6,6 @@ module.exports = {
   ssn: '322-86-7143', // Digits only, no dashes
   dob: null, // Not provided for this test
   matterId: 'a2N5G0000032eANUAY', // Actual Matter ID from logs
-  endpointUrl: 'https://bblaw--partial.sandbox.my.salesforce-sites.com/MilitarySearchCallback/services/apexrest/MilitarySearchCallback'
+  endpointUrl: 'https://bblaw--partial.sandbox.my.salesforce-sites.com/MilitarySearchCallback/services/apexrest/MilitarySearchCallback',
+  serverBaseUrl: "http://localhost:LOCAL_TEST" // Added for local testing screenshot URLs
 }; 

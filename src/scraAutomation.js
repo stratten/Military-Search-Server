@@ -510,9 +510,26 @@ async function runScraAutomation({
       }
       
       if (checkboxFound) {
+        console.log('Checkbox interaction successful.');
+        const submitButtonSelector = 'button[name="SubmitButton"]:has-text("Submit")';
+        try {
+            console.log(`Waiting for submit button to be visible: ${submitButtonSelector}`);
+            await page.waitForSelector(submitButtonSelector, { state: 'visible', timeout: 10000 }); 
+            console.log('Submit button is visible. Checking if enabled...');
+            // After ensuring visibility, explicitly check if the button is enabled
+            const submitButton = page.locator(submitButtonSelector);
+            if (!await submitButton.isEnabled({ timeout: 5000 })) { // Wait up to 5s for it to be enabled
+                throw new Error('Submit button is visible but not enabled.');
+            }
+            console.log('Submit button is enabled.');
+        } catch (e) {
+            console.error(`Error waiting for submit button to be ready: ${e.message}`);
+            await snap('screenshot_submit_not_ready.png');
+            throw e; // Re-throw to trigger existing error handling for submit failure
+        }
+
         // Submit the form
         console.log('Clicking Submit button...');
-        await snap('screenshot_before_submit.png');
         
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         const pdfPath = path.join(runFolder, `scra-result.pdf`);
@@ -521,7 +538,19 @@ async function runScraAutomation({
           // Use a longer timeout for the download
           const downloadPromise = page.waitForEvent('download', { timeout: 60000 });
           
-          await page.click('button[type="submit"]:has-text("Submit")');
+          const submitButtonSelector = 'button[name="SubmitButton"]:has-text("Submit")';
+
+          try {
+            console.log('Attempting to click Submit button (1st try)...');
+            await page.click(submitButtonSelector, { timeout: 15000 }); // Shorter timeout for first attempt
+          } catch (clickError) {
+            console.warn(`First submit click failed: ${clickError.message}. Retrying in 2 seconds...`);
+            await snap('screenshot_submit_click_failed_1st_try.png');
+            await page.waitForTimeout(2000);
+            console.log('Attempting to click Submit button (2nd try)...');
+            await page.click(submitButtonSelector, { timeout: 30000 }); // Longer timeout for second attempt
+          }
+
           console.log('Download started, waiting for completion...');
           await snap('screenshot_download_started.png');
 
