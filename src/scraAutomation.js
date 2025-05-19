@@ -231,8 +231,7 @@ function setupNetworkLogging(page, runFolder) {
 }
 
 // Helper to log screenshot URLs
-function logScreenshotUrl(runFolder, filename) {
-  const baseUrl = process.env.PUBLIC_BASE_URL || 'https://military-search-server-production.up.railway.app';
+function logScreenshotUrl(runFolder, filename, baseUrl) {
   const url = `${baseUrl}/screenshots/${runFolder}/${filename}`;
   console.log(`Screenshot available at: ${url}`);
 }
@@ -245,7 +244,8 @@ async function runScraAutomation({
   scraUsername,
   scraPassword,
   matterId,
-  endpointUrl
+  endpointUrl,
+  serverBaseUrl
 }) {
   // Set a safety timeout to catch hangs
   let safetyTimeout = setupSafetyTimeout(30000); // 30 seconds
@@ -339,7 +339,7 @@ async function runScraAutomation({
       const name = nextScreenshotName(base); // Uses screenshotIndex from outer scope
       const filePath = path.join(runFolder, name); // Uses runFolder
       await page.screenshot({ path: filePath }); // Uses page
-      logScreenshotUrl(path.basename(runFolder), name); // Uses logScreenshotUrl (global)
+      logScreenshotUrl(path.basename(runFolder), name, serverBaseUrl); // Pass serverBaseUrl here
     }
     
     // Reset the safety timeout now that we've gotten past the critical initialization stage
@@ -391,95 +391,62 @@ async function runScraAutomation({
 
     // Handle Privacy Act confirmation modal if present
     try {
-      await page.screenshot({ path: path.join(runFolder, nextScreenshotName('screenshot_before_privacy_modal.png')) });
-      logScreenshotUrl(path.basename(runFolder), nextScreenshotName('screenshot_before_privacy_modal.png'));
       const privacyAcceptBtn = await page.$('button[title="I Accept"]');
       if (privacyAcceptBtn) {
         console.log('Privacy confirmation modal detected. Clicking Accept...');
         await privacyAcceptBtn.click();
         await page.waitForTimeout(500); // Small delay to allow modal to close
-        await page.screenshot({ path: path.join(runFolder, nextScreenshotName('screenshot_after_privacy_modal.png')) });
-        logScreenshotUrl(path.basename(runFolder), nextScreenshotName('screenshot_after_privacy_modal.png'));
+        await snap('screenshot_after_privacy_modal.png');
       } else {
         console.log('No privacy confirmation modal detected.');
       }
     } catch (modalError) {
       console.log('Error handling privacy modal:', modalError.message);
-      await page.screenshot({ path: path.join(runFolder, nextScreenshotName('screenshot_privacy_modal_error.png')) });
-      logScreenshotUrl(path.basename(runFolder), nextScreenshotName('screenshot_privacy_modal_error.png'));
+      await snap('screenshot_privacy_modal_error.png');
       // Continue even if modal handling fails - it might not be present
     }
 
     // Check for login form
-    await page.screenshot({ path: path.join(runFolder, nextScreenshotName('screenshot_before_login_check.png')) });
-    logScreenshotUrl(path.basename(runFolder), nextScreenshotName('screenshot_before_login_check.png'));
     if (await page.$('input#username')) {
       console.log('Login form detected, logging in...');
-      await page.screenshot({ path: path.join(runFolder, nextScreenshotName('screenshot_login_form_found.png')) });
-      logScreenshotUrl(path.basename(runFolder), nextScreenshotName('screenshot_login_form_found.png'));
+      await snap('screenshot_login_form_found.png');
       try {
         await page.fill('input#username', scraUsername);
-        await page.screenshot({ path: path.join(runFolder, nextScreenshotName('screenshot_after_username_filled.png')) });
-        logScreenshotUrl(path.basename(runFolder), nextScreenshotName('screenshot_after_username_filled.png'));
         await page.fill('input#password', scraPassword);
-        await page.screenshot({ path: path.join(runFolder, nextScreenshotName('screenshot_after_password_filled.png')) });
-        logScreenshotUrl(path.basename(runFolder), nextScreenshotName('screenshot_after_password_filled.png'));
-        
+
         console.log('Submitting login credentials...');
-        await page.screenshot({ path: path.join(runFolder, nextScreenshotName('screenshot_before_login_submit.png')) });
-        logScreenshotUrl(path.basename(runFolder), nextScreenshotName('screenshot_before_login_submit.png'));
         await Promise.all([
           page.click("button[type='submit']"),
           page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 45000 })
         ]);
         console.log('Logged in successfully');
-        await page.screenshot({ path: path.join(runFolder, nextScreenshotName('screenshot_after_login.png')) });
-        logScreenshotUrl(path.basename(runFolder), nextScreenshotName('screenshot_after_login.png'));
+        await snap('screenshot_after_login.png');
       } catch (loginError) {
         console.error('Error during login:', loginError.message);
-        await page.screenshot({ path: path.join(runFolder, nextScreenshotName('screenshot_login_error.png')) });
-        logScreenshotUrl(path.basename(runFolder), nextScreenshotName('screenshot_login_error.png'));
+        await snap('screenshot_login_error.png');
         throw new Error(`Login failed: ${loginError.message}`);
       }
     } else {
       console.log('No login form detected, continuing...');
-      await page.screenshot({ path: path.join(runFolder, nextScreenshotName('screenshot_no_login_form.png')) });
-      logScreenshotUrl(path.basename(runFolder), nextScreenshotName('screenshot_no_login_form.png'));
     }
 
     // Give the page a moment to stabilize after login
     await page.waitForTimeout(2000);
-    await page.screenshot({ path: path.join(runFolder, nextScreenshotName('screenshot_after_stabilization.png')) });
-    logScreenshotUrl(path.basename(runFolder), nextScreenshotName('screenshot_after_stabilization.png'));
 
     // Fill out the form fields
-    await page.screenshot({ path: path.join(runFolder, nextScreenshotName('screenshot_before_form_filling.png')) });
-    logScreenshotUrl(path.basename(runFolder), nextScreenshotName('screenshot_before_form_filling.png'));
-    // Clean SSN to ensure only digits are submitted
     const cleanedSsn = ssn.replace(/\D/g, '');
     console.log('Filling out SSN...');
     await page.fill('#ssnInput', cleanedSsn);
-    await page.screenshot({ path: path.join(runFolder, nextScreenshotName('screenshot_after_ssn_filled.png')) });
-    logScreenshotUrl(path.basename(runFolder), nextScreenshotName('screenshot_after_ssn_filled.png'));
     await page.fill('#ssnConfirmationInput', cleanedSsn);
-    await page.screenshot({ path: path.join(runFolder, nextScreenshotName('screenshot_after_ssn_confirmation_filled.png')) });
-    logScreenshotUrl(path.basename(runFolder), nextScreenshotName('screenshot_after_ssn_confirmation_filled.png'));
     console.log('Filling out Last Name...');
     await page.fill('#lastNameInput', lastName);
-    await page.screenshot({ path: path.join(runFolder, nextScreenshotName('screenshot_after_lastname_filled.png')) });
-    logScreenshotUrl(path.basename(runFolder), nextScreenshotName('screenshot_after_lastname_filled.png'));
     console.log('Filling out First Name...');
     await page.fill('#firstNameInput', firstName);
-    await page.screenshot({ path: path.join(runFolder, nextScreenshotName('screenshot_after_firstname_filled.png')) });
-    logScreenshotUrl(path.basename(runFolder), nextScreenshotName('screenshot_after_firstname_filled.png'));
     if (dob) {
       console.log('Filling out Date of Birth...');
       await page.fill('#mat-input-2', dob); // Format: MM/DD/YYYY
-      await page.screenshot({ path: path.join(runFolder, nextScreenshotName('screenshot_after_dob_filled.png')) });
-      logScreenshotUrl(path.basename(runFolder), nextScreenshotName('screenshot_after_dob_filled.png'));
     }
-    await page.screenshot({ path: path.join(runFolder, nextScreenshotName('screenshot_after_form_completed.png')) });
-    logScreenshotUrl(path.basename(runFolder), nextScreenshotName('screenshot_after_form_completed.png'));
+    await snap('screenshot_after_form_completed.png');
 
     // Accept terms
     console.log('Waiting for I Accept checkbox to be attached...');
@@ -489,33 +456,25 @@ async function runScraAutomation({
     
     try {
       // Wait longer for the checkbox to appear
-      await page.screenshot({ path: path.join(runFolder, nextScreenshotName('screenshot_before_checkbox_wait.png')) });
-      logScreenshotUrl(path.basename(runFolder), nextScreenshotName('screenshot_before_checkbox_wait.png'));
       await page.waitForSelector(checkboxSelector, { state: 'attached', timeout: 20000 });
-      await page.screenshot({ path: path.join(runFolder, nextScreenshotName('screenshot_before_checkbox.png')) });
-      logScreenshotUrl(path.basename(runFolder), nextScreenshotName('screenshot_before_checkbox.png'));
       console.log('Screenshot taken before attempting to check I Accept checkbox.');
       
       try {
         await page.check(checkboxSelector);
         checkboxFound = true;
         console.log('Checked the checkbox using input[name="termsAgree"]');
-        await page.screenshot({ path: path.join(runFolder, nextScreenshotName('screenshot_after_checkbox.png')) });
-        logScreenshotUrl(path.basename(runFolder), nextScreenshotName('screenshot_after_checkbox.png'));
+        await snap('screenshot_after_checkbox.png');
       } catch (e) {
         console.log('Primary check failed, trying to click the label as fallback...', e.message);
-        await page.screenshot({ path: path.join(runFolder, nextScreenshotName('screenshot_checkbox_primary_failed.png')) });
-        logScreenshotUrl(path.basename(runFolder), nextScreenshotName('screenshot_checkbox_primary_failed.png'));
+        await snap('screenshot_checkbox_primary_failed.png');
         try {
           await page.click(labelSelector);
           checkboxFound = true;
           console.log('Checked the checkbox by clicking the label.');
-          await page.screenshot({ path: path.join(runFolder, nextScreenshotName('screenshot_after_checkbox_label_click.png')) });
-          logScreenshotUrl(path.basename(runFolder), nextScreenshotName('screenshot_after_checkbox_label_click.png'));
+          await snap('screenshot_after_checkbox_label_click.png');
         } catch (e2) {
           console.log('Fallback label click also failed.', e2.message);
-          await page.screenshot({ path: path.join(runFolder, nextScreenshotName('screenshot_checkbox_label_failed.png')) });
-          logScreenshotUrl(path.basename(runFolder), nextScreenshotName('screenshot_checkbox_label_failed.png'));
+          await snap('screenshot_checkbox_label_failed.png');
           
           // Try a more general approach
           console.log('Trying alternative checkbox methods...');
@@ -527,8 +486,7 @@ async function runScraAutomation({
                 await checkbox.check();
                 checkboxFound = true;
                 console.log('Successfully checked a checkbox using alternative method');
-                await page.screenshot({ path: path.join(runFolder, nextScreenshotName('screenshot_after_checkbox_alternative.png')) });
-                logScreenshotUrl(path.basename(runFolder), nextScreenshotName('screenshot_after_checkbox_alternative.png'));
+                await snap('screenshot_after_checkbox_alternative.png');
                 break;
               } catch (e3) {
                 console.log('Failed to check checkbox, trying next...');
@@ -541,35 +499,31 @@ async function runScraAutomation({
       if (checkboxFound) {
         // Submit the form
         console.log('Clicking Submit button...');
-        await page.screenshot({ path: path.join(runFolder, nextScreenshotName('screenshot_before_submit.png')) });
-        logScreenshotUrl(path.basename(runFolder), nextScreenshotName('screenshot_before_submit.png'));
+        await snap('screenshot_before_submit.png');
         
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         const pdfPath = path.join(runFolder, `scra-result.pdf`);
         
         try {
           // Use a longer timeout for the download
-          const [ download ] = await Promise.all([
-            page.waitForEvent('download', { timeout: 45000 }),
-            page.click('button[name="SubmitButton"]'),
-          ]);
+          const downloadPromise = page.waitForEvent('download', { timeout: 60000 });
           
+          await page.click('button[type="submit"]:has-text("Submit")');
           console.log('Download started, waiting for completion...');
-          await page.screenshot({ path: path.join(runFolder, nextScreenshotName('screenshot_download_started.png')) });
-          logScreenshotUrl(path.basename(runFolder), nextScreenshotName('screenshot_download_started.png'));
+          await snap('screenshot_download_started.png');
+
+          const download = await downloadPromise;
           await download.saveAs(pdfPath);
           console.log(`PDF downloaded and saved to: ${pdfPath}`);
-          await page.screenshot({ path: path.join(runFolder, nextScreenshotName('screenshot_after_download.png')) });
-          logScreenshotUrl(path.basename(runFolder), nextScreenshotName('screenshot_after_download.png'));
+          await snap('screenshot_after_download.png');
 
           // Parse the PDF to determine proofOfMilitaryServiceFound
           const fileData = fs.readFileSync(pdfPath);
           const pdfData = await pdfParse(fileData);
-          const pdfText = pdfData.text;
+          const pdfText = pdfData.text.toLowerCase();
           
           console.log('PDF parsed, analyzing content');
-          await page.screenshot({ path: path.join(runFolder, nextScreenshotName('screenshot_pdf_parsing.png')) });
-          logScreenshotUrl(path.basename(runFolder), nextScreenshotName('screenshot_pdf_parsing.png'));
+          await snap('screenshot_pdf_parsing.png');
           
           // Simple heuristic: look for any value in the relevant sections that is not 'NA' or 'No'
           let proofOfMilitaryServiceFound = 'No';
@@ -613,8 +567,7 @@ async function runScraAutomation({
               timestamp: new Date().toISOString()
             }, null, 2)
           );
-          await page.screenshot({ path: path.join(runFolder, nextScreenshotName('screenshot_before_callback.png')) });
-          logScreenshotUrl(path.basename(runFolder), nextScreenshotName('screenshot_before_callback.png'));
+          await snap('screenshot_before_callback.png');
 
           // POST to endpoint if provided
           if (endpointUrl) {
@@ -644,8 +597,7 @@ async function runScraAutomation({
               });
               
               console.log(`POST to endpoint succeeded: ${postResp.status} ${postResp.statusText}`);
-              await page.screenshot({ path: path.join(runFolder, nextScreenshotName('screenshot_after_callback.png')) });
-              logScreenshotUrl(path.basename(runFolder), nextScreenshotName('screenshot_after_callback.png'));
+              await snap('screenshot_after_callback.png');
               
               // Check if response contains HTML instead of JSON
               const isHtmlResponse = 
@@ -676,8 +628,7 @@ async function runScraAutomation({
               );
             } catch (err) {
               console.error('POST to endpoint failed:', err.response ? err.response.data : err.message);
-              await page.screenshot({ path: path.join(runFolder, 'screenshot_callback_error.png') });
-              logScreenshotUrl(path.basename(runFolder), 'screenshot_callback_error.png');
+              await snap('screenshot_callback_error.png');
               
               // Save error information
               fs.writeFileSync(
@@ -699,19 +650,16 @@ async function runScraAutomation({
           }
         } catch (downloadError) {
           console.error('Error during form submission or download:', downloadError.message);
-          await page.screenshot({ path: path.join(runFolder, 'screenshot_download_error.png') });
-          logScreenshotUrl(path.basename(runFolder), 'screenshot_download_error.png');
+          await snap('screenshot_download_error.png');
           throw new Error(`Form submission failed: ${downloadError.message}`);
         }
       } else {
-        await page.screenshot({ path: path.join(runFolder, 'screenshot_checkbox_not_found.png') });
-        logScreenshotUrl(path.basename(runFolder), 'screenshot_checkbox_not_found.png');
+        await snap('screenshot_checkbox_not_found.png');
         throw new Error('I Accept checkbox not found or not interactable after multiple attempts.');
       }
     } catch (checkboxError) {
       console.error('Error with checkbox handling:', checkboxError.message);
-      await page.screenshot({ path: path.join(runFolder, 'screenshot_checkbox_error.png') });
-      logScreenshotUrl(path.basename(runFolder), 'screenshot_checkbox_error.png');
+      await snap('screenshot_checkbox_error.png');
       throw checkboxError;
     }
   } catch (err) {
@@ -720,7 +668,7 @@ async function runScraAutomation({
       try {
         const page = browser.contexts()[0]?.pages()[0];
         if (page) {
-          await page.screenshot({ path: path.join(runFolder, 'screenshot_on_error.png') });
+          await snap('screenshot_final_error.png');
           console.log('Screenshot taken on error.');
           
           // Save network log summary if available

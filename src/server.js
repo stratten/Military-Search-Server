@@ -346,6 +346,7 @@ app.post('/scra-request', async (req, res) => {
     res.status(202).json({ message: 'Request received and automation started' });
 
     // Then run the automation asynchronously
+    const currentBaseUrl = `${req.protocol}://${req.get('host')}`;
     runScraAutomation({
       ssn,
       dob,
@@ -354,7 +355,8 @@ app.post('/scra-request', async (req, res) => {
       scraUsername,
       scraPassword,
       matterId,
-      endpointUrl: effectiveCallbackUrl
+      endpointUrl: effectiveCallbackUrl,
+      serverBaseUrl: currentBaseUrl
     }).catch(err => {
       console.error('Error in automation process (caught in server.js):', err.message);
     });
