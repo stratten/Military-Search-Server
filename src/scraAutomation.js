@@ -334,6 +334,14 @@ async function runScraAutomation({
     fs.writeFileSync(path.join(runFolder, nextScreenshotName('screenshot_after_page_creation.png')), 
                     Buffer.from('Page created - no visual yet', 'utf8'));
     
+    // Helper to capture and log screenshots with matching filenames
+    async function snap(base) {
+      const name = nextScreenshotName(base); // Uses screenshotIndex from outer scope
+      const filePath = path.join(runFolder, name); // Uses runFolder
+      await page.screenshot({ path: filePath }); // Uses page
+      logScreenshotUrl(path.basename(runFolder), name); // Uses logScreenshotUrl (global)
+    }
+    
     // Reset the safety timeout now that we've gotten past the critical initialization stage
     if (safetyTimeout) {
       clearTimeout(safetyTimeout);
