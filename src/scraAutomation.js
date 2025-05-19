@@ -257,6 +257,30 @@ async function runScraAutomation({
     return `${String(screenshotIndex++).padStart(2, '0')}_${base}`;
   }
 
+  // Define snap here, in the broader runScraAutomation scope
+  async function snap(base) {
+    const name = nextScreenshotName(base);
+    const filePath = path.join(runFolder, name);
+    // Ensure page is available - might not be if error happened early
+    const currentPage = browser?.contexts()[0]?.pages()[0]; 
+    if (currentPage) {
+      try {
+        await currentPage.screenshot({ path: filePath });
+        logScreenshotUrl(path.basename(runFolder), name, serverBaseUrl);
+      } catch (snapError) {
+        console.error(`Snap: Failed to take screenshot ${name}:`, snapError.message);
+        // Optionally, write a text file indicating screenshot failure for this snap
+        fs.writeFileSync(filePath + ".txt", `Screenshot failed: ${snapError.message}`);
+        logScreenshotUrl(path.basename(runFolder), name + ".txt", serverBaseUrl);
+      }
+    } else {
+      console.log(`Snap: Page not available for screenshot ${name}`);
+      // Optionally, write a text file indicating no visual for this snap
+      fs.writeFileSync(filePath + ".txt", `Page not available for screenshot at this stage.`);
+      logScreenshotUrl(path.basename(runFolder), name + ".txt", serverBaseUrl);
+    }
+  }
+
   console.log('Running SCRA automation with:', {
     ssn: ssn ? `***-**-${ssn.replace(/\D/g, '').slice(-4)}` : 'MISSING',
     dob: dob ? 'PROVIDED' : 'NOT PROVIDED',
@@ -286,8 +310,7 @@ async function runScraAutomation({
     
     console.log('Browser initialized successfully. Creating browser context...');
     // Take screenshot of system state after browser initialization
-    fs.writeFileSync(path.join(runFolder, nextScreenshotName('screenshot_after_browser_init.png')), 
-                    Buffer.from('Browser initialized - no visual yet', 'utf8'));
+    await snap('screenshot_after_browser_init.png');
     logDetailedMemoryUsage();
     
     // Use common user agents that are less likely to be blocked
@@ -317,8 +340,7 @@ async function runScraAutomation({
     
     console.log('Browser context created. Creating new page...');
     // Take screenshot of system state after context creation
-    fs.writeFileSync(path.join(runFolder, nextScreenshotName('screenshot_after_context_creation.png')), 
-                    Buffer.from('Context created - no visual yet', 'utf8'));
+    await snap('screenshot_after_context_creation.png');
     
     // Create page with timeout
     const pagePromise = context.newPage();
@@ -331,16 +353,7 @@ async function runScraAutomation({
     
     console.log('Page created successfully.');
     // Take screenshot of system state after page creation
-    fs.writeFileSync(path.join(runFolder, nextScreenshotName('screenshot_after_page_creation.png')), 
-                    Buffer.from('Page created - no visual yet', 'utf8'));
-    
-    // Helper to capture and log screenshots with matching filenames
-    async function snap(base) {
-      const name = nextScreenshotName(base); // Uses screenshotIndex from outer scope
-      const filePath = path.join(runFolder, name); // Uses runFolder
-      await page.screenshot({ path: filePath }); // Uses page
-      logScreenshotUrl(path.basename(runFolder), name, serverBaseUrl); // Pass serverBaseUrl here
-    }
+    await snap('screenshot_after_page_creation.png');
     
     // Reset the safety timeout now that we've gotten past the critical initialization stage
     if (safetyTimeout) {
@@ -362,7 +375,7 @@ async function runScraAutomation({
       // Connectivity check: navigate to Google to confirm Internet access
       console.log('Connectivity check: navigating to Google');
       await page.goto('https://www.google.com', { timeout: 60000, waitUntil: 'domcontentloaded' });
-      await snap('screenshot_google_connectivity.png'); // Use snap helper
+      await snap('screenshot_google_connectivity.png');
       console.log('Connectivity test completed successfully');
       // Raw HTTP GET test to the SCRA site (without fragment) to distinguish network-level blocking
       const rawScrUrl = SCRA_URL.split('#')[0];
@@ -375,17 +388,17 @@ async function runScraAutomation({
       }
       
       console.log(`Navigating to SCRA URL: ${SCRA_URL}`);
-      await snap('screenshot_before_navigation.png'); // Use snap helper
+      await snap('screenshot_before_navigation.png');
       
       // Retry navigation up to 3 times in case of transient issues
       await retry(() => page.goto(SCRA_URL, { timeout: 60000, waitUntil: 'domcontentloaded' }), 3, 1000, 60000, new Error('Failed to navigate to SCRA site after 3 attempts'));
       console.log(`Successfully loaded page: ${await page.title()}`);
       // Take screenshot for verification
-      await snap('screenshot_after_nav.png'); // Use snap helper
+      await snap('screenshot_after_nav.png');
       console.log('Screenshot taken after navigation.');
     } catch (navError) {
       console.error('Navigation error:', navError);
-      await snap('screenshot_nav_error.png'); // Use snap helper
+      await snap('screenshot_nav_error.png');
       throw new Error(`Failed to navigate to SCRA site: ${navError.message}`);
     }
 
@@ -666,19 +679,18 @@ async function runScraAutomation({
     console.error('Error during SCRA automation:', err);
     if (browser) {
       try {
-        const page = browser.contexts()[0]?.pages()[0];
-        if (page) {
-          await snap('screenshot_final_error.png');
-          console.log('Screenshot taken on error.');
-          
-          // Save network log summary if available
-          if (networkLogger) {
-            const summary = networkLogger.logNetworkSummary();
-            fs.writeFileSync(
-              path.join(runFolder, 'network_summary.json'),
-              JSON.stringify(summary, null, 2)
-            );
-          }
+        // page variable might not be defined here if error was early
+        // but snap will now try to get current page from browser context
+        await snap('screenshot_final_error.png'); 
+        console.log('Screenshot taken on error.');
+        
+        // Save network log summary if available
+        if (networkLogger) {
+          const summary = networkLogger.logNetworkSummary();
+          fs.writeFileSync(
+            path.join(runFolder, 'network_summary.json'),
+            JSON.stringify(summary, null, 2)
+          );
         }
       } catch (screenshotErr) {
         console.error('Failed to take screenshot on error:', screenshotErr);
