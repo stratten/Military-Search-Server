@@ -11,6 +11,10 @@ const ROOT_DIR = path.join(__dirname, '..');
 const OUTPUTS_DIR = path.join(ROOT_DIR, 'outputs');
 const LOGS_DIR = path.join(ROOT_DIR, 'logs');
 
+// Queue for SCRA requests
+const scraRequestQueue = [];
+let isAutomationRunning = false;
+
 // Ensure outputs directory exists
 if (!fs.existsSync(OUTPUTS_DIR)) {
   fs.mkdirSync(OUTPUTS_DIR);
@@ -22,6 +26,30 @@ if (!fs.existsSync(LOGS_DIR)) {
 }
 
 app.use(express.json());
+
+// Function to process the SCRA request queue
+async function processScraQueue() {
+  if (isAutomationRunning || scraRequestQueue.length === 0) {
+    return; // Automation is busy or queue is empty
+  }
+
+  isAutomationRunning = true;
+  const requestData = scraRequestQueue.shift(); // Get the oldest request
+
+  console.log(`Processing next SCRA request from queue for Matter ID: ${requestData.matterId}`);
+
+  try {
+    await runScraAutomation(requestData);
+    console.log(`Successfully completed automation for Matter ID: ${requestData.matterId}`);
+  } catch (error) {
+    console.error(`Error processing SCRA request for Matter ID ${requestData.matterId} from queue:`, error.message);
+    // Error is already logged within runScraAutomation, including saving reports
+  } finally {
+    isAutomationRunning = false;
+    // Check if there are more items in the queue
+    processScraQueue(); 
+  }
+}
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -342,24 +370,36 @@ app.post('/scra-request', async (req, res) => {
       originalKeys: Object.keys(req.body)
     });
 
-    // Send immediate response to prevent timeout
-    res.status(202).json({ message: 'Request received and automation started' });
-
     // Then run the automation asynchronously
     const currentBaseUrl = `${req.protocol}://${req.get('host')}`;
-    runScraAutomation({
-      ssn,
-      dob,
-      lastName,
-      firstName,
-      scraUsername,
-      scraPassword,
-      matterId,
-      endpointUrl: effectiveCallbackUrl,
-      serverBaseUrl: currentBaseUrl
-    }).catch(err => {
-      console.error('Error in automation process (caught in server.js):', err.message);
+    
+    // Construct automationParams with all necessary data, including the derived effectiveCallbackUrl
+    const automationParams = {
+        ssn,
+        dob,
+        lastName,
+        firstName,
+        scraUsername,
+        scraPassword,
+        matterId,
+        endpointUrl: effectiveCallbackUrl, // Use the normalized URL
+        serverBaseUrl: currentBaseUrl
+    };
+
+    // Add request to the queue
+    scraRequestQueue.push(automationParams);
+    console.log(`Request for Matter ID ${matterId} added to queue. Queue size: ${scraRequestQueue.length}`);
+
+    // Send immediate response to Salesforce indicating the request is queued
+    res.status(202).json({ 
+      message: 'Request received and queued for processing.',
+      matterId: matterId,
+      queuePosition: scraRequestQueue.length 
     });
+
+    // Attempt to process the queue
+    processScraQueue();
+
   } catch (error) {
     console.error('Error handling request:', error);
     // If we haven't sent a response yet, send an error
